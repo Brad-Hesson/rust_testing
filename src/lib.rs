@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use std::sync::{
     mpsc::{channel, Sender},
     Arc, Mutex,
@@ -12,21 +11,18 @@ pub struct ThreadPool {
 impl ThreadPool {
     pub fn new(num_threads: usize) -> Self {
         let (tx, rx) = channel::<Box<dyn FnMut() + Send>>();
-        let rx = Arc::new(Mutex::new(rx));
-        let mut handles = vec![];
-
-        for _ in 0..num_threads {
-            let rxc = rx.clone();
-            let clsr = move || loop {
-                let recv = rxc.lock().unwrap().recv();
-                if let Ok(mut work) = recv {
-                    work();
-                } else {
-                    break;
-                }
-            };
-            handles.push(std::thread::spawn(clsr));
-        }
+        let rx_ref = Arc::new(Mutex::new(rx));
+        let clsr = move || loop {
+            let recv = rx_ref.lock().unwrap().recv();
+            if let Ok(mut work) = recv {
+                work();
+            } else {
+                break;
+            }
+        };
+        let handles = (0..num_threads)
+            .map(|_| std::thread::spawn(clsr.clone()))
+            .collect();
 
         Self { handles, tx }
     }
