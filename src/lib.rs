@@ -4,7 +4,6 @@ use std::sync::{
 };
 
 pub struct ThreadPool {
-    handles: Vec<std::thread::JoinHandle<()>>,
     tx: Sender<Box<dyn FnMut() + Send>>,
 }
 
@@ -20,11 +19,11 @@ impl ThreadPool {
                 break;
             }
         };
-        let handles = (0..num_threads)
-            .map(|_| std::thread::spawn(clsr.clone()))
-            .collect();
+        (0..num_threads).for_each(|_| {
+            std::thread::spawn(clsr.clone());
+        });
 
-        Self { handles, tx }
+        Self { tx }
     }
 
     pub fn execute<T: FnMut() + Send + 'static>(&self, work: T) {
