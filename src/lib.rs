@@ -6,12 +6,12 @@ use std::sync::{
 
 pub struct ThreadPool {
     handles: Vec<std::thread::JoinHandle<()>>,
-    tx: Sender<Box<dyn Fn() + Send>>,
+    tx: Sender<Box<dyn FnMut() + Send>>,
 }
 
 impl ThreadPool {
     pub fn new(num_threads: usize) -> Self {
-        let (tx, rx) = channel::<Box<dyn Fn() + Send>>();
+        let (tx, rx) = channel::<Box<dyn FnMut() + Send>>();
         let rx = Arc::new(Mutex::new(rx));
         let mut handles = vec![];
 
@@ -19,7 +19,7 @@ impl ThreadPool {
             let rxc = rx.clone();
             let clsr = move || loop {
                 let recv = rxc.lock().unwrap().recv();
-                if let Ok(work) = recv {
+                if let Ok(mut work) = recv {
                     work();
                 } else {
                     break;
@@ -31,7 +31,7 @@ impl ThreadPool {
         Self { handles, tx }
     }
 
-    pub fn execute<T: Fn() + Send + 'static>(&self, work: T) {
+    pub fn execute<T: FnMut() + Send + 'static>(&self, work: T) {
         self.tx.send(Box::new(work)).unwrap();
     }
 }
