@@ -5,15 +5,22 @@ use std::rc::Rc;
 
 type Link<T> = Rc<RefCell<Box<T>>>;
 
-#[derive(Debug)]
 pub struct Deque<T>{
     front: Option<Link<Node<T>>>,
     back: Option<Link<Node<T>>>
 }
 
+impl<T: std::fmt::Debug> std::fmt::Debug for Deque<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Deque")
+        .field("node", &self.front)
+         .finish()
+    }
+}
+
 
 struct Node<T>{
-    elem: T,
+    elem: Option<T>,
     next: Option<Link<Node<T>>>,
     prev: Option<Link<Node<T>>>,
 }
@@ -37,7 +44,7 @@ impl<T> Deque<T>{
 
     pub fn push_front(&mut self, elem: T){
         let node = Node{
-            elem,
+            elem: Some(elem),
             next: None,
             prev: self.front.take()
         };
@@ -48,6 +55,20 @@ impl<T> Deque<T>{
         } else {
             self.back = Some(link.clone());
         };
+    }
+
+    pub fn pop_front(&mut self) -> Option<T>{
+        if let Some(front) = self.front.take(){
+            if let Some(prev) = &front.borrow().prev{
+                prev.borrow_mut().next = None;
+            } else {
+                self.back = None;
+            }
+            self.front = front.borrow_mut().prev.take();
+            front.borrow_mut().elem.take()
+        }else{
+            None
+        }
     }
 }
 
@@ -60,6 +81,8 @@ mod tests{
         deq.push_front(3);
         deq.push_front(4);
         deq.push_front(5);
+        assert_eq!(deq.pop_front(), Some(5));
+        assert_eq!(deq.pop_front(), Some(4));
         println!("{:?}", deq)
     }
 }
