@@ -43,30 +43,28 @@ impl<T> Deque<T>{
     }
 
     pub fn push_front(&mut self, elem: T){
-        let node = Node{
+        let link = Rc::new(RefCell::new(Box::new(Node{
             elem: Some(elem),
             next: None,
             prev: self.front.take()
-        };
-        let link = Rc::new(RefCell::new(Box::new(node)));
+        })));
         self.front = Some(link.clone());
-        if let Some(prev) = &link.borrow().prev{
-            prev.borrow_mut().next = Some(link.clone());
+        if let Some(inner) = &link.borrow().prev{
+            inner.borrow_mut().next = Some(link.clone());
         } else {
             self.back = Some(link.clone());
         };
     }
 
     pub fn push_back(&mut self, elem: T){
-        let node = Node{
+        let link = Rc::new(RefCell::new(Box::new(Node{
             elem: Some(elem),
             next: self.back.take(),
             prev: None
-        };
-        let link = Rc::new(RefCell::new(Box::new(node)));
+        })));
         self.back = Some(link.clone());
-        if let Some(next) = &link.borrow().next{
-            next.borrow_mut().prev = Some(link.clone());
+        if let Some(inner) = &link.borrow().next{
+            inner.borrow_mut().prev = Some(link.clone());
         } else {
             self.front = Some(link.clone());
         };
@@ -74,8 +72,8 @@ impl<T> Deque<T>{
 
     pub fn pop_front(&mut self) -> Option<T>{
         if let Some(front) = self.front.take(){
-            if let Some(prev) = &front.borrow().prev{
-                prev.borrow_mut().next = None;
+            if let Some(inner) = &front.borrow().prev{
+                inner.borrow_mut().next = None;
             } else {
                 self.back = None;
             }
@@ -88,8 +86,8 @@ impl<T> Deque<T>{
 
     pub fn pop_back(&mut self) -> Option<T>{
         if let Some(back) = self.back.take(){
-            if let Some(next) = &back.borrow().next{
-                next.borrow_mut().prev = None;
+            if let Some(inner) = &back.borrow().next{
+                inner.borrow_mut().prev = None;
             } else {
                 self.front = None;
             }
