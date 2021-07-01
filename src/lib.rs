@@ -2,6 +2,7 @@ use std::sync::{
     mpsc::{channel, Sender},
     Arc, Mutex,
 };
+mod linked_list;
 
 pub trait SendableClosure: FnMut() + Send + 'static {}
 impl<T> SendableClosure for T where T: FnMut() + Send + 'static {}
