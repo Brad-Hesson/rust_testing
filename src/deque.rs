@@ -57,6 +57,21 @@ impl<T> Deque<T>{
         };
     }
 
+    pub fn push_back(&mut self, elem: T){
+        let node = Node{
+            elem: Some(elem),
+            next: self.back.take(),
+            prev: None
+        };
+        let link = Rc::new(RefCell::new(Box::new(node)));
+        self.back = Some(link.clone());
+        if let Some(next) = &link.borrow().next{
+            next.borrow_mut().prev = Some(link.clone());
+        } else {
+            self.front = Some(link.clone());
+        };
+    }
+
     pub fn pop_front(&mut self) -> Option<T>{
         if let Some(front) = self.front.take(){
             if let Some(prev) = &front.borrow().prev{
@@ -70,6 +85,20 @@ impl<T> Deque<T>{
             None
         }
     }
+
+    pub fn pop_back(&mut self) -> Option<T>{
+        if let Some(back) = self.back.take(){
+            if let Some(next) = &back.borrow().next{
+                next.borrow_mut().prev = None;
+            } else {
+                self.front = None;
+            }
+            self.back = back.borrow_mut().next.take();
+            back.borrow_mut().elem.take()
+        }else{
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -78,11 +107,21 @@ mod tests{
     #[test]
     fn test_deque(){
         let mut deq: Deque<i32> = Deque::new();
-        deq.push_front(3);
-        deq.push_front(4);
-        deq.push_front(5);
-        assert_eq!(deq.pop_front(), Some(5));
-        assert_eq!(deq.pop_front(), Some(4));
-        println!("{:?}", deq)
+        deq.push_back(3);
+        deq.push_back(4);
+        deq.push_back(5);
+        deq.push_front(2);
+        deq.push_front(1);
+        deq.push_front(0);
+        assert_eq!(deq.pop_back(), Some(5));
+        assert_eq!(deq.pop_front(), Some(0));
+        assert_eq!(deq.pop_back(), Some(4));
+        assert_eq!(deq.pop_front(), Some(1));
+        assert_eq!(deq.pop_back(), Some(3));
+        deq.push_front(9);
+        assert_eq!(deq.pop_back(), Some(2));
+        assert_eq!(deq.pop_back(), Some(9));
+        assert_eq!(deq.pop_back(), None);
+        assert_eq!(deq.pop_front(), None);
     }
 }
