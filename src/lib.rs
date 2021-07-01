@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 pub trait SendableClosure: FnMut() + Send + 'static {}
-impl<T: FnMut() + Send + 'static> SendableClosure for T {}
+impl<T> SendableClosure for T where T: FnMut() + Send + 'static {}
 
 pub struct ThreadPool {
     tx: Sender<Box<dyn SendableClosure>>,
