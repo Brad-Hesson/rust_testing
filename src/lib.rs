@@ -3,6 +3,7 @@ use std::sync::{
     Arc, Mutex,
 };
 mod linked_list;
+mod deque;
 
 pub trait SendableClosure: FnMut() + Send + 'static {}
 impl<T> SendableClosure for T where T: FnMut() + Send + 'static {}
