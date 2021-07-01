@@ -3,13 +3,16 @@ use std::sync::{
     Arc, Mutex,
 };
 
+pub trait SendableClosure: FnMut() + Send + 'static {}
+impl<T: FnMut() + Send + 'static> SendableClosure for T {}
+
 pub struct ThreadPool {
-    tx: Sender<Box<dyn FnMut() + Send>>,
+    tx: Sender<Box<dyn SendableClosure>>,
 }
 
 impl ThreadPool {
     pub fn new(num_threads: usize) -> Self {
-        let (tx, rx) = channel::<Box<dyn FnMut() + Send>>();
+        let (tx, rx) = channel::<Box<dyn SendableClosure>>();
         let rx_ref = Arc::new(Mutex::new(rx));
         let clsr = move || loop {
             let recv = rx_ref.lock().unwrap().recv();
@@ -26,7 +29,7 @@ impl ThreadPool {
         Self { tx }
     }
 
-    pub fn execute<T: FnMut() + Send + 'static>(&self, work: T) {
+    pub fn execute(&self, work: impl SendableClosure) {
         self.tx.send(Box::new(work)).unwrap();
     }
 }
