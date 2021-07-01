@@ -37,7 +37,6 @@ impl ThreadPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicI32, Ordering};
 
     #[test]
     fn multiple_tasks_test() {
@@ -57,6 +56,8 @@ mod tests {
 
     #[test]
     fn atomic_int_test() {
+        use std::sync::atomic::{AtomicI32, Ordering};
+
         let sum = Arc::new(AtomicI32::new(0));
         let sum_ref = sum.clone();
 
@@ -71,8 +72,8 @@ mod tests {
 
         std::thread::sleep(std::time::Duration::from_secs(2));
 
-        let sum = sum.load(Ordering::SeqCst);
-        assert_eq!(sum, 3);
-        println!("Sum: {}", sum);
+        let sumf = sum.load(Ordering::SeqCst);
+        assert_eq!(sumf, 3);
+        println!("Sum: {}", sumf);
     }
 }
