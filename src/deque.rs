@@ -118,17 +118,4 @@ mod tests {
         assert_eq!(deq.pop_back(), None);
         assert_eq!(deq.pop_front(), None);
     }
-    #[test]
-    fn peek_test() {
-        let mut deq: Deque<i32> = Deque::new();
-        deq.push_back(3);
-        deq.push_back(4);
-        deq.push_back(5);
-        deq.push_front(2);
-        deq.push_front(1);
-        deq.push_front(0);
-
-        //assert_eq!(deq.front, 0);
-        //assert_eq!(deq.back, 5);
-    }
 }
