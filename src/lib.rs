@@ -2,7 +2,8 @@ use std::sync::{
     mpsc::{channel, Sender},
     Arc, Mutex,
 };
-mod linked_list;
+pub mod deque;
+pub mod linked_list;
 
 pub trait SendableClosure: FnMut() + Send + 'static {}
 impl<T> SendableClosure for T where T: FnMut() + Send + 'static {}
@@ -40,22 +41,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn multiple_tasks_test() {
-        let pool = ThreadPool::new(5);
-        let foo = || {
-            println!("Start thread");
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            println!("End thread");
-        };
-
-        pool.execute(foo.clone());
-        pool.execute(foo.clone());
-        pool.execute(foo);
-
-        std::thread::sleep(std::time::Duration::from_secs(2));
-    }
-
-    #[test]
     fn atomic_int_test() {
         use std::sync::atomic::{AtomicI32, Ordering};
 
@@ -67,14 +52,11 @@ mod tests {
             sum_ref.fetch_add(1, Ordering::SeqCst);
         };
 
-        pool.execute(foo.clone());
-        pool.execute(foo.clone());
-        pool.execute(foo);
+        (0..20).for_each(|_| pool.execute(foo.clone()));
 
-        std::thread::sleep(std::time::Duration::from_secs(2));
+        std::thread::sleep(std::time::Duration::from_millis(100));
 
         let sumf = sum.load(Ordering::SeqCst);
-        assert_eq!(sumf, 3);
-        println!("Sum: {}", sumf);
+        assert_eq!(sumf, 20);
     }
 }
