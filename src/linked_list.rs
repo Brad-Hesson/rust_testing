@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub struct Node<T> {
+struct Node<T> {
     elem: T,
     link: Option<Box<Node<T>>>,
 }
