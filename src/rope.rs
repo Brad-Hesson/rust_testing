@@ -126,46 +126,35 @@ impl RopeInner {
         })
     }
     #[allow(unreachable_code)]
-    fn split(mut self, i: usize) -> (Self, Self) {
+    fn split(self, i: usize) -> (Self, Self) {
         let new_left: Self;
-        let mut new_right: Self;
-        let str_temp: Option<String>;
-        if let Self::Leaf(ref leaf) = self {
-            assert!(i <= leaf.string.len());
-            new_right = RopeInner::Leaf(Leaf::from(leaf.string[i..].to_string()));
-            str_temp = Some(leaf.string[..i].to_string());
-        } else {
-            unreachable!();
-            new_right = RopeInner::new();
-            str_temp = None;
-        }
-        if let Some(string) = str_temp {
-            self.set_string(string);
-            return (self, new_right);
-        }
-        if let Self::Node(node) = self {
-            let weight = node.weight;
-            if i <= weight {
-                let get_node_clsr = |n: Box<Self>| Some(n.split(i));
-                let (split_left, split_right) =
-                    node.left.and_then(get_node_clsr).unwrap_or_default();
-                let outer = *node.right.unwrap_or_default();
-                new_left = split_left;
-                new_right = Self::concat(split_right, outer);
-            } else {
-                let get_node_clsr = |n: Box<Self>| Some(n.split(i - weight));
-                let (split_left, split_right) =
-                    node.right.and_then(get_node_clsr).unwrap_or_default();
-                let outer = *node.left.unwrap_or_default();
-                new_left = Self::concat(outer, split_left);
-                new_right = split_right;
+        let new_right: Self;
+        match self {
+            RopeInner::Leaf(leaf) => {
+                assert!(i <= leaf.string.len());
+                new_left = RopeInner::Leaf(Leaf::from(leaf.string[..i].to_string()));
+                new_right = RopeInner::Leaf(Leaf::from(leaf.string[i..].to_string()));
             }
-        } else {
-            new_left = RopeInner::new();
-        };
-        (new_left, new_right)
-    }
+            RopeInner::Node(node) => {
+                let weight = node.weight;
+                if i <= weight {
+                    let get_node_clsr = |n: Box<Self>| Some(n.split(i));
+                    let (split_left, split_right) =
+                        node.left.and_then(get_node_clsr).unwrap_or_default();
+                    let outer = *node.right.unwrap_or_default();
+                    new_left = split_left;
+                    new_right = Self::concat(split_right, outer);
+                } else {
+                    let get_node_clsr = |n: Box<Self>| Some(n.split(i - weight));
+                    let (split_left, split_right) =
+                        node.right.and_then(get_node_clsr).unwrap_or_default();
+                    let outer = *node.left.unwrap_or_default();
+                    new_left = Self::concat(outer, split_left);
+                    new_right = split_right;
+                }
+            }
         }
+        (new_left, new_right)
     }
     fn index(&self, index: usize) -> String {
         match self {
