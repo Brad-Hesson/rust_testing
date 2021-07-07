@@ -60,6 +60,27 @@ impl Rope {
     }
 }
 
+#[derive(Debug)]
+struct Node {
+    weight: usize,
+    left: Option<Box<RopeInner>>,
+    right: Option<Box<RopeInner>>,
+}
+
+#[derive(Debug)]
+struct Leaf {
+    string: String,
+    weight: usize,
+}
+impl From<String> for Leaf {
+    fn from(string: String) -> Self {
+        Self {
+            weight: string.len(),
+            string,
+        }
+    }
+}
+
 enum RopeInner {
     Node(Node),
     Leaf(Leaf),
@@ -177,27 +198,6 @@ impl RopeInner {
     fn set_string(&mut self, string: String) {
         if let Self::Leaf(leaf) = self {
             leaf.string = string;
-        }
-    }
-}
-
-#[derive(Debug)]
-struct Node {
-    weight: usize,
-    left: Option<Box<RopeInner>>,
-    right: Option<Box<RopeInner>>,
-}
-
-#[derive(Debug)]
-struct Leaf {
-    string: String,
-    weight: usize,
-}
-impl From<String> for Leaf {
-    fn from(string: String) -> Self {
-        Self {
-            weight: string.len(),
-            string,
         }
     }
 }
