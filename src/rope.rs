@@ -15,7 +15,7 @@ impl From<RopeInner> for Rope {
 }
 impl From<String> for Rope {
     fn from(string: String) -> Self {
-        Self::from(RopeInner::Leaf(Box::new(Leaf::from(string))))
+        Self::from(RopeInner::from(Leaf::from(string)))
     }
 }
 impl From<&str> for Rope {
@@ -98,6 +98,16 @@ impl Debug for RopeInner {
         }
     }
 }
+impl From<Node> for RopeInner {
+    fn from(node: Node) -> Self {
+        Self::Node(Box::new(node))
+    }
+}
+impl From<Leaf> for RopeInner {
+    fn from(leaf: Leaf) -> Self {
+        Self::Leaf(Box::new(leaf))
+    }
+}
 impl RopeInner {
     fn new() -> Self {
         Self::None
@@ -128,11 +138,11 @@ impl RopeInner {
         if let Self::None = right {
             return left;
         }
-        Self::Node(Box::new(Node {
+        Self::from(Node {
             weight: left.len(),
             left,
             right,
-        }))
+        })
     }
     fn split(self, index: usize) -> (Self, Self) {
         assert!(
@@ -148,14 +158,14 @@ impl RopeInner {
             return (self, Self::None);
         }
         match self {
-            RopeInner::Leaf(leaf) => {
+            Self::Leaf(leaf) => {
                 assert!(index < leaf.string.len());
                 (
-                    RopeInner::Leaf(Box::new(Leaf::from(leaf.string[..index].to_string()))),
-                    RopeInner::Leaf(Box::new(Leaf::from(leaf.string[index..].to_string()))),
+                    Self::from(Leaf::from(leaf.string[..index].to_string())),
+                    Self::from(Leaf::from(leaf.string[index..].to_string())),
                 )
             }
-            RopeInner::Node(node) => {
+            Self::Node(node) => {
                 if index <= node.weight {
                     let (split_left, split_right) = node.left.split(index);
                     (split_left, Self::concat(split_right, node.right))
@@ -164,7 +174,7 @@ impl RopeInner {
                     (Self::concat(node.left, split_left), split_right)
                 }
             }
-            RopeInner::None => unreachable!(),
+            Self::None => unreachable!(),
         }
     }
     fn index(&self, index: usize) -> &str {
@@ -175,15 +185,15 @@ impl RopeInner {
             self.len()
         );
         match self {
-            RopeInner::Leaf(leaf) => &leaf.string[index..index + 1],
-            RopeInner::Node(node) => {
+            Self::Leaf(leaf) => &leaf.string[index..index + 1],
+            Self::Node(node) => {
                 if index < node.weight {
                     node.left.index(index)
                 } else {
                     node.right.index(index - node.weight)
                 }
             }
-            RopeInner::None => unreachable!(),
+            Self::None => unreachable!(),
         }
     }
 }
