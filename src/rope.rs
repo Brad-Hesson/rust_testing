@@ -135,7 +135,6 @@ impl RopeInner {
         }))
     }
     fn split(self, index: usize) -> (Self, Self) {
-        assert!(index < self.len(), "index {} out of bounds of Rope with length {}", index, self.len());
         match self {
             RopeInner::Leaf(leaf) => {
                 assert!(index <= leaf.string.len());
@@ -199,21 +198,23 @@ mod tests {
     #[test]
     fn rope_concat_and_return_test() {
         let (r, s) = setup_rope();
-
         assert_eq!(r.len(), 22);
         assert_eq!(r.get_string(), s)
     }
     #[test]
     fn rope_node_split_test() {
-        let r1 = Rope::from("Hello, ");
-        let r2 = Rope::from("World!");
-        let r = Rope::concat(r1, r2);
-        let (left, right) = r.split(6);
-        assert_eq!(left.get_string(), "Hello,".to_string());
-        assert_eq!(right.get_string(), " World!".to_string());
-        let (left, right) = right.split(3);
-        assert_eq!(left.get_string(), " Wo".to_string());
-        assert_eq!(right.get_string(), "rld!".to_string());
+        let (_, s) = setup_rope();
+
+        let clsr = |i: usize| {
+            let (r, s) = setup_rope();
+            assert_eq!(r.split(i).1.split(1).0.get_string(), s[i..i+1]);
+
+            let (r, _) = setup_rope();
+            assert_eq!(r.split(i+1).0.split(i).1.get_string(), s[i..i+1]);
+        };
+
+        (0..s.len()).for_each(clsr);
+
     }
     #[test]
     fn rope_insert_test() {
