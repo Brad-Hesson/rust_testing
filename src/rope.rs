@@ -1,7 +1,7 @@
 use std::{fmt::Debug, str, usize};
 
 pub struct Rope {
-    inner: Box<RopeInner>,
+    inner: RopeInner,
 }
 impl Debug for Rope {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -10,14 +10,12 @@ impl Debug for Rope {
 }
 impl From<RopeInner> for Rope {
     fn from(ri: RopeInner) -> Self {
-        Self {
-            inner: Box::new(ri),
-        }
+        Self { inner: ri }
     }
 }
 impl From<String> for Rope {
     fn from(string: String) -> Self {
-        Self::from(RopeInner::Leaf(Leaf::from(string)))
+        Self::from(RopeInner::Leaf(Box::new(Leaf::from(string))))
     }
 }
 impl From<&str> for Rope {
@@ -36,7 +34,7 @@ impl Rope {
         self.inner.get_string()
     }
     pub fn concat(left: Self, right: Self) -> Self {
-        Self::from(RopeInner::concat(*left.inner, *right.inner))
+        Self::from(RopeInner::concat(left.inner, right.inner))
     }
     pub fn split(self, i: usize) -> (Self, Self) {
         let (left, right) = self.inner.split(i);
@@ -63,8 +61,8 @@ impl Rope {
 #[derive(Debug)]
 struct Node {
     weight: usize,
-    left: Option<Box<RopeInner>>,
-    right: Option<Box<RopeInner>>,
+    left: RopeInner,
+    right: RopeInner,
 }
 
 #[derive(Debug)]
@@ -82,8 +80,9 @@ impl From<String> for Leaf {
 }
 
 enum RopeInner {
-    Node(Node),
-    Leaf(Leaf),
+    Node(Box<Node>),
+    Leaf(Box<Leaf>),
+    None,
 }
 impl Default for RopeInner {
     fn default() -> Self {
@@ -95,109 +94,79 @@ impl Debug for RopeInner {
         match self {
             RopeInner::Node(node) => node.fmt(f),
             RopeInner::Leaf(leaf) => leaf.fmt(f),
+            RopeInner::None => f.debug_struct("None").finish(),
         }
     }
 }
 impl RopeInner {
     fn new() -> Self {
-        Self::Node(Node {
-            left: None,
-            right: None,
-            weight: 0,
-        })
+        Self::None
     }
     fn len(&self) -> usize {
         match self {
+            Self::None => 0,
             Self::Leaf(leaf) => leaf.weight,
-            Self::Node(node) => {
-                node.weight
-                    + node
-                        .right
-                        .as_ref()
-                        .and_then(|r| Some(r.len()))
-                        .unwrap_or_default()
-            }
+            Self::Node(node) => node.weight + node.right.len(),
         }
     }
     fn get_string(&self) -> String {
         match self {
+            &Self::None => String::new(),
             Self::Leaf(leaf) => leaf.string.clone(),
             Self::Node(node) => {
-                let get_string_clsr = |r: &Box<Self>| Some(r.get_string());
-                let mut left_str = node
-                    .left
-                    .as_ref()
-                    .and_then(get_string_clsr)
-                    .unwrap_or_default();
-                let right_str = node
-                    .right
-                    .as_ref()
-                    .and_then(get_string_clsr)
-                    .unwrap_or_default();
+                let mut left_str = node.left.get_string();
+                let right_str = node.right.get_string();
                 left_str.push_str(&right_str);
                 left_str
             }
         }
     }
     fn concat(left: Self, right: Self) -> Self {
-        Self::Node(Node {
+        if let Self::None = left {
+            return right;
+        }
+        if let Self::None = right {
+            return left;
+        }
+        Self::Node(Box::new(Node {
             weight: left.len(),
-            left: Some(Box::new(left)),
-            right: Some(Box::new(right)),
-        })
+            left,
+            right,
+        }))
     }
-    #[allow(unreachable_code)]
-    fn split(self, i: usize) -> (Self, Self) {
-        let new_left: Self;
-        let new_right: Self;
+    fn split(self, index: usize) -> (Self, Self) {
+        assert!(index < self.len(), "index {} out of bounds of Rope with length {}", index, self.len());
         match self {
             RopeInner::Leaf(leaf) => {
-                assert!(i <= leaf.string.len());
-                new_left = RopeInner::Leaf(Leaf::from(leaf.string[..i].to_string()));
-                new_right = RopeInner::Leaf(Leaf::from(leaf.string[i..].to_string()));
+                assert!(index <= leaf.string.len());
+                let new_left = RopeInner::Leaf(Box::new(Leaf::from(leaf.string[..index].to_string())));
+                let new_right = RopeInner::Leaf(Box::new(Leaf::from(leaf.string[index..].to_string())));
+                (new_left, new_right)
             }
             RopeInner::Node(node) => {
-                let weight = node.weight;
-                if i <= weight {
-                    let get_node_clsr = |n: Box<Self>| Some(n.split(i));
-                    let (split_left, split_right) =
-                        node.left.and_then(get_node_clsr).unwrap_or_default();
-                    let outer = *node.right.unwrap_or_default();
-                    new_left = split_left;
-                    new_right = Self::concat(split_right, outer);
+                if index <= node.weight {
+                    let (split_left, split_right) = node.left.split(index);
+                    (split_left, Self::concat(split_right, node.right))
                 } else {
-                    let get_node_clsr = |n: Box<Self>| Some(n.split(i - weight));
-                    let (split_left, split_right) =
-                        node.right.and_then(get_node_clsr).unwrap_or_default();
-                    let outer = *node.left.unwrap_or_default();
-                    new_left = Self::concat(outer, split_left);
-                    new_right = split_right;
+                    let (split_left, split_right) = node.right.split(index - node.weight);
+                    (Self::concat(node.left, split_left), split_right)
                 }
             }
+            RopeInner::None => unreachable!(),
         }
-        (new_left, new_right)
     }
     fn index(&self, index: usize) -> String {
+        assert!(index < self.len(), "index {} out of bounds of Rope with length {}", index, self.len());
         match self {
             RopeInner::Leaf(leaf) => leaf.string[index..index + 1].to_string(),
             RopeInner::Node(node) => {
                 if index < node.weight {
-                    node.left
-                        .as_ref()
-                        .and_then(|r| Some(r.index(index)))
-                        .unwrap_or_default()
+                    node.left.index(index)
                 } else {
-                    node.right
-                        .as_ref()
-                        .and_then(|r| Some(r.index(index - node.weight)))
-                        .unwrap_or_default()
+                    node.right.index(index - node.weight)
                 }
             }
-        }
-    }
-    fn set_string(&mut self, string: String) {
-        if let Self::Leaf(leaf) = self {
-            leaf.string = string;
+            RopeInner::None => unreachable!(),
         }
     }
 }
