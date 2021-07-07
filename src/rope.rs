@@ -53,7 +53,7 @@ impl Rope {
         let new = Self::concat(left, right);
         drop(std::mem::replace(self, new));
     }
-    pub fn index(&self, index: usize) -> String {
+    pub fn index(&self, index: usize) -> &str {
         self.inner.index(index)
     }
 }
@@ -135,12 +135,25 @@ impl RopeInner {
         }))
     }
     fn split(self, index: usize) -> (Self, Self) {
+        assert!(
+            index <= self.len(),
+            "index {} out of bounds of Rope with length {}",
+            index,
+            self.len()
+        );
+        if index == 0 {
+            return (Self::None, self);
+        }
+        if index == self.len() {
+            return (self, Self::None);
+        }
         match self {
             RopeInner::Leaf(leaf) => {
-                assert!(index <= leaf.string.len());
-                let new_left = RopeInner::Leaf(Box::new(Leaf::from(leaf.string[..index].to_string())));
-                let new_right = RopeInner::Leaf(Box::new(Leaf::from(leaf.string[index..].to_string())));
-                (new_left, new_right)
+                assert!(index < leaf.string.len());
+                (
+                    RopeInner::Leaf(Box::new(Leaf::from(leaf.string[..index].to_string()))),
+                    RopeInner::Leaf(Box::new(Leaf::from(leaf.string[index..].to_string()))),
+                )
             }
             RopeInner::Node(node) => {
                 if index <= node.weight {
@@ -154,10 +167,15 @@ impl RopeInner {
             RopeInner::None => unreachable!(),
         }
     }
-    fn index(&self, index: usize) -> String {
-        assert!(index < self.len(), "index {} out of bounds of Rope with length {}", index, self.len());
+    fn index(&self, index: usize) -> &str {
+        assert!(
+            index < self.len(),
+            "index {} out of bounds of Rope with length {}",
+            index,
+            self.len()
+        );
         match self {
-            RopeInner::Leaf(leaf) => leaf.string[index..index + 1].to_string(),
+            RopeInner::Leaf(leaf) => &leaf.string[index..index + 1],
             RopeInner::Node(node) => {
                 if index < node.weight {
                     node.left.index(index)
@@ -207,14 +225,13 @@ mod tests {
 
         let clsr = |i: usize| {
             let (r, s) = setup_rope();
-            assert_eq!(r.split(i).1.split(1).0.get_string(), s[i..i+1]);
+            assert_eq!(r.split(i).1.split(1).0.get_string(), s[i..i + 1]);
 
             let (r, _) = setup_rope();
-            assert_eq!(r.split(i+1).0.split(i).1.get_string(), s[i..i+1]);
+            assert_eq!(r.split(i + 1).0.split(i).1.get_string(), s[i..i + 1]);
         };
 
         (0..s.len()).for_each(clsr);
-
     }
     #[test]
     fn rope_insert_test() {
