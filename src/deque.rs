@@ -124,14 +124,14 @@ impl<T: Debug> Debug for Deque<T> {
         }
     }
 }
-impl<T> Iterator for Deque<T>{
+impl<T> Iterator for Deque<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.pop_front()
     }
 }
-impl<T> DoubleEndedIterator for Deque<T>{
+impl<T> DoubleEndedIterator for Deque<T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.pop_back()
     }
