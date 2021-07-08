@@ -1,4 +1,8 @@
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::{
+    cell::{Ref, RefCell},
+    fmt::Debug,
+    rc::Rc,
+};
 
 pub struct Deque<T> {
     front: Option<Rc<RefCell<Node<T>>>>,
@@ -113,6 +117,18 @@ impl<T> Deque<T> {
                     Err(_) => unreachable!(),
                 }
             }
+        }
+    }
+    pub fn peek_front(&self) -> Option<Ref<T>> {
+        match &self.front {
+            None => None,
+            Some(link) => Some(Ref::map(link.as_ref().borrow(), |n| &n.elem)),
+        }
+    }
+    pub fn peek_back(&self) -> Option<Ref<T>> {
+        match &self.back {
+            None => None,
+            Some(link) => Some(Ref::map(link.as_ref().borrow(), |n| &n.elem)),
         }
     }
 }
