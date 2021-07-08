@@ -1,96 +1,154 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
-type Link<T> = Rc<RefCell<Box<T>>>;
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 pub struct Deque<T> {
-    front: Option<Link<Node<T>>>,
-    back: Option<Link<Node<T>>>,
+    front: Option<Rc<RefCell<Node<T>>>>,
+    back: Option<Rc<RefCell<Node<T>>>>,
 }
-
-impl<T: std::fmt::Debug> std::fmt::Debug for Deque<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Deque").field("node", &self.front).finish()
-    }
-}
-
-struct Node<T> {
-    elem: Option<T>,
-    next: Option<Link<Node<T>>>,
-    prev: Option<Link<Node<T>>>,
-}
-
-impl<T: std::fmt::Debug> std::fmt::Debug for Node<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Node")
-            .field("elem", &self.elem)
-            .field("next", &self.next)
-            .finish()
-    }
-}
-
 impl<T> Deque<T> {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             front: None,
             back: None,
         }
     }
-
     pub fn push_front(&mut self, elem: T) {
-        let link = Rc::new(RefCell::new(Box::new(Node {
-            elem: Some(elem),
-            next: None,
-            prev: self.front.take(),
-        })));
-        self.front = Some(link.clone());
-        if let Some(inner) = &link.borrow().prev {
-            inner.borrow_mut().next = Some(link.clone());
-        } else {
-            self.back = Some(link.clone());
-        };
+        // construct a node from the given element
+        let mut node = Node::from(elem);
+        match &self.front {
+            // if the front link is empty
+            None => {
+                // confirm that the back link is also empty
+                assert!(self.back.is_none());
+                // construct a new link for the new node
+                let link = Rc::new(RefCell::new(node));
+                // assign a copy of the link to self's front and back fields
+                self.front = Some(link.clone());
+                self.back = Some(link);
+            }
+            // if the deque is not empty
+            Some(old_front) => {
+                // set the node's "prev link" to a copy of the old front node's link
+                node.prev = Some(old_front.clone());
+                // construct a link for the new node
+                let link = Rc::new(RefCell::new(node));
+                // assign a copy of the link to the old front node's next field
+                old_front.as_ref().borrow_mut().next = Some(link.clone());
+                // assign the link to self's front field
+                self.front = Some(link);
+            }
+        }
     }
-
     pub fn push_back(&mut self, elem: T) {
-        let link = Rc::new(RefCell::new(Box::new(Node {
-            elem: Some(elem),
-            next: self.back.take(),
-            prev: None,
-        })));
-        self.back = Some(link.clone());
-        if let Some(inner) = &link.borrow().next {
-            inner.borrow_mut().prev = Some(link.clone());
-        } else {
-            self.front = Some(link.clone());
-        };
+        // construct a node from the given element
+        let mut node = Node::from(elem);
+        match &self.back {
+            // if the back link is empty
+            None => {
+                // confirm that the front link is also empty
+                assert!(self.front.is_none());
+                // construct a new link for the new node
+                let link = Rc::new(RefCell::new(node));
+                // assign a copy of the link to self's front and back fields
+                self.back = Some(link.clone());
+                self.front = Some(link);
+            }
+            // if the deque is not empty
+            Some(old_back) => {
+                // set the node's "next link" to a copy of the old back node's link
+                node.next = Some(old_back.clone());
+                // construct a link for the new node
+                let link = Rc::new(RefCell::new(node));
+                // assign a copy of the link to the old back node's next field
+                old_back.as_ref().borrow_mut().prev = Some(link.clone());
+                // assign the link to self's back field
+                self.back = Some(link);
+            }
+        }
     }
-
     pub fn pop_front(&mut self) -> Option<T> {
-        if let Some(front) = self.front.take() {
-            if let Some(inner) = &front.borrow().prev {
-                inner.borrow_mut().next = None;
-            } else {
-                self.back = None;
+        match self.front.take() {
+            // if the deque is empty
+            None => None,
+            // if the deque is not empty
+            Some(link) => {
+                // clear the previous node's link to us
+                match link.as_ref().borrow_mut().prev.as_ref() {
+                    // if a previous node exists, set it's "next link" to None
+                    Some(prev) => prev.as_ref().borrow_mut().next = None,
+                    // otherwise we are the only node, set self's "back link" to None
+                    None => self.back = None,
+                };
+                // set self's "front link" to whatever our "prev link" is
+                self.front = link.as_ref().borrow_mut().prev.clone();
+                // deconstruct the link into the element it contains and return
+                match Rc::try_unwrap(link) {
+                    Ok(refcell) => Some(refcell.into_inner().elem),
+                    // if Err, we don't have the only reference to link
+                    // and something has gone very wrong
+                    Err(_) => unreachable!(),
+                }
             }
-            self.front = front.borrow_mut().prev.take();
-            front.borrow_mut().elem.take()
-        } else {
-            None
         }
     }
-
     pub fn pop_back(&mut self) -> Option<T> {
-        if let Some(back) = self.back.take() {
-            if let Some(inner) = &back.borrow().next {
-                inner.borrow_mut().prev = None;
-            } else {
-                self.front = None;
+        match self.back.take() {
+            // if the deque is empty
+            None => None,
+            // if the deque is not empty
+            Some(link) => {
+                // clear the next node's link to us
+                match link.as_ref().borrow_mut().next.as_ref() {
+                    // if a next node exists, set it's "prev link" to None
+                    Some(next) => next.as_ref().borrow_mut().prev = None,
+                    // otherwise we are the only node, set self's "front link" to None
+                    None => self.front = None,
+                };
+                // set self's "back link" to whatever our "next link" is
+                self.back = link.as_ref().borrow_mut().next.clone();
+                // deconstruct the link into the element it contains and return
+                match Rc::try_unwrap(link) {
+                    Ok(elem) => Some(elem.into_inner().elem),
+                    // if Err, we don't have the only reference to link
+                    //  and something has gone very wrong
+                    Err(_) => unreachable!(),
+                }
             }
-            self.back = back.borrow_mut().next.take();
-            back.borrow_mut().elem.take()
-        } else {
-            None
         }
+    }
+}
+impl<T: Debug> Debug for Deque<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.back {
+            Some(l) => l.borrow().fmt(f),
+            None => Option::<T>::None.fmt(f),
+        }
+    }
+}
+
+struct Node<T> {
+    elem: T,
+    next: Option<Rc<RefCell<Node<T>>>>,
+    prev: Option<Rc<RefCell<Node<T>>>>,
+}
+impl<T> From<T> for Node<T> {
+    fn from(elem: T) -> Self {
+        Self {
+            elem,
+            next: None,
+            prev: None,
+        }
+    }
+}
+impl<T: Debug> Debug for Node<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let next = match &self.next {
+            Some(l) => Some(l.borrow()),
+            None => None,
+        };
+        f.debug_struct("")
+            .field("elem", &self.elem)
+            .field("next", &next)
+            .finish()
     }
 }
 
@@ -99,7 +157,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pop_test() {
+    fn deque_push_front_test() {
+        let mut d = Deque::<usize>::new();
+        d.push_front(1);
+        d.push_front(2);
+    }
+    #[test]
+    fn deque_pop_front_test() {
+        let mut d = Deque::<usize>::new();
+        d.push_front(1);
+        d.push_front(2);
+        assert_eq!(d.pop_front(), Some(2));
+        assert_eq!(d.pop_front(), Some(1));
+    }
+    #[test]
+    fn deque_push_back_test() {
+        let mut d = Deque::<usize>::new();
+        d.push_back(1);
+        d.push_back(2);
+    }
+    #[test]
+    fn deque_pop_back_test() {
+        let mut d = Deque::<usize>::new();
+        d.push_back(1);
+        d.push_back(2);
+        assert_eq!(d.pop_back(), Some(2));
+        assert_eq!(d.pop_back(), Some(1));
+    }
+    #[test]
+    fn deque_front_back_pop_test() {
         let mut deq: Deque<i32> = Deque::new();
         deq.push_back(3);
         deq.push_back(4);
