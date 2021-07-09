@@ -83,6 +83,36 @@ impl<T> Deque<T> {
     pub fn peek_back(&self) -> Option<&T> {
         self.back.as_ref().map(|node| &node.elem)
     }
+    pub fn peek_front_nth(&self, index: usize) -> Option<&T> {
+        self.front
+            .as_ref()
+            .map(|rc| {
+                Node::walk(rc.clone(), index, false)
+                    .map(|new_rc| Rc::into_raw(new_rc))
+                    .map(|ptr| {
+                        let out = unsafe { ptr.as_ref().map(|n| &n.elem) };
+                        unsafe { drop(Rc::from_raw(ptr)) };
+                        out
+                    })
+            })
+            .flatten()
+            .flatten()
+    }
+    pub fn peek_back_nth(&self, index: usize) -> Option<&T> {
+        self.back
+            .as_ref()
+            .map(|rc| {
+                Node::walk(rc.clone(), index, true)
+                    .map(|index_rc| Rc::into_raw(index_rc))
+                    .map(|ptr| {
+                        let out = unsafe { ptr.as_ref().map(|n| &n.elem) };
+                        unsafe { drop(Rc::from_raw(ptr)) };
+                        out
+                    })
+            })
+            .flatten()
+            .flatten()
+    }
 }
 impl<T: Debug> Debug for Deque<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -109,6 +139,26 @@ struct Node<T> {
     elem: T,
     next: RefCell<Option<Rc<Node<T>>>>,
     prev: RefCell<Option<Rc<Node<T>>>>,
+}
+impl<T> Node<T> {
+    fn walk(rc: Rc<Node<T>>, index: usize, forward: bool) -> Option<Rc<Node<T>>> {
+        if index == 0 {
+            return Some(rc);
+        }
+        if forward {
+            rc.next
+                .borrow()
+                .as_ref()
+                .map(|prev_rc| Self::walk(prev_rc.clone(), index - 1, forward))
+                .flatten()
+        } else {
+            rc.prev
+                .borrow()
+                .as_ref()
+                .map(|prev_rc| Self::walk(prev_rc.clone(), index - 1, forward))
+                .flatten()
+        }
+    }
 }
 impl<T> From<T> for Node<T> {
     fn from(elem: T) -> Self {
@@ -197,5 +247,39 @@ mod tests {
         d.pop_back();
         assert_eq!(d.peek_front(), None);
         assert_eq!(d.peek_back(), None);
+    }
+    #[test]
+    fn deque_peek_front_nth_test() {
+        let mut d: Deque<i32> = Deque::new();
+        d.push_back(3);
+        d.push_back(4);
+        d.push_back(5);
+        d.push_front(2);
+        d.push_front(1);
+        d.push_front(0);
+        assert_eq!(d.peek_front_nth(0), Some(&0));
+        assert_eq!(d.peek_front_nth(1), Some(&1));
+        assert_eq!(d.peek_front_nth(2), Some(&2));
+        assert_eq!(d.peek_front_nth(3), Some(&3));
+        assert_eq!(d.peek_front_nth(4), Some(&4));
+        assert_eq!(d.peek_front_nth(5), Some(&5));
+        assert_eq!(d.peek_front_nth(6), None);
+    }
+    #[test]
+    fn deque_peek_back_nth_test() {
+        let mut d: Deque<i32> = Deque::new();
+        d.push_back(3);
+        d.push_back(4);
+        d.push_back(5);
+        d.push_front(2);
+        d.push_front(1);
+        d.push_front(0);
+        assert_eq!(d.peek_back_nth(0), Some(&5));
+        assert_eq!(d.peek_back_nth(1), Some(&4));
+        assert_eq!(d.peek_back_nth(2), Some(&3));
+        assert_eq!(d.peek_back_nth(3), Some(&2));
+        assert_eq!(d.peek_back_nth(4), Some(&1));
+        assert_eq!(d.peek_back_nth(5), Some(&0));
+        assert_eq!(d.peek_back_nth(6), None);
     }
 }
