@@ -1,8 +1,4 @@
-use std::{
-    cell::RefCell,
-    fmt::Debug,
-    rc::Rc,
-};
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 pub struct Deque<T> {
     front: Option<Rc<Node<T>>>,
@@ -149,6 +145,7 @@ mod tests {
         d.push_front(2);
         assert_eq!(d.pop_front(), Some(2));
         assert_eq!(d.pop_front(), Some(1));
+        assert_eq!(d.pop_front(), None);
     }
     #[test]
     fn deque_push_back_test() {
@@ -163,9 +160,10 @@ mod tests {
         d.push_back(2);
         assert_eq!(d.pop_back(), Some(2));
         assert_eq!(d.pop_back(), Some(1));
+        assert_eq!(d.pop_back(), None);
     }
     #[test]
-    fn deque_front_back_pop_test() {
+    fn deque_pop_front_back_test() {
         let mut deq: Deque<i32> = Deque::new();
         deq.push_back(3);
         deq.push_back(4);
@@ -183,5 +181,21 @@ mod tests {
         assert_eq!(deq.pop_back(), Some(9));
         assert_eq!(deq.pop_back(), None);
         assert_eq!(deq.pop_front(), None);
+    }
+    #[test]
+    fn deque_peek_test() {
+        let mut d = Deque::<usize>::new();
+        d.push_front(1);
+        assert_eq!(d.peek_front(), Some(&1));
+        assert_eq!(d.peek_back(), Some(&1));
+        d.push_front(2);
+        assert_eq!(d.peek_front(), Some(&2));
+        assert_eq!(d.peek_back(), Some(&1));
+        d.pop_back();
+        assert_eq!(d.peek_front(), Some(&2));
+        assert_eq!(d.peek_back(), Some(&2));
+        d.pop_back();
+        assert_eq!(d.peek_front(), None);
+        assert_eq!(d.peek_back(), None);
     }
 }
