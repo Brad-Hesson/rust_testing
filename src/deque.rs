@@ -87,13 +87,12 @@ impl<T> Deque<T> {
         self.front
             .as_ref()
             .map(|rc| {
-                Node::walk(rc.clone(), index, false)
-                    .map(|new_rc| Rc::into_raw(new_rc))
-                    .map(|ptr| {
-                        let out = unsafe { ptr.as_ref().map(|n| &n.elem) };
-                        unsafe { drop(Rc::from_raw(ptr)) };
-                        out
-                    })
+                Node::walk(rc.clone(), index, false).map(|index_rc| {
+                    let ptr = Rc::into_raw(index_rc);
+                    let out = unsafe { ptr.as_ref().map(|n| &n.elem) };
+                    unsafe { drop(Rc::from_raw(ptr)) };
+                    out
+                })
             })
             .flatten()
             .flatten()
@@ -102,13 +101,12 @@ impl<T> Deque<T> {
         self.back
             .as_ref()
             .map(|rc| {
-                Node::walk(rc.clone(), index, true)
-                    .map(|index_rc| Rc::into_raw(index_rc))
-                    .map(|ptr| {
-                        let out = unsafe { ptr.as_ref().map(|n| &n.elem) };
-                        unsafe { drop(Rc::from_raw(ptr)) };
-                        out
-                    })
+                Node::walk(rc.clone(), index, true).map(|index_rc| {
+                    let ptr = Rc::into_raw(index_rc);
+                    let out = unsafe { ptr.as_ref().map(|n| &n.elem) };
+                    unsafe { drop(Rc::from_raw(ptr)) };
+                    out
+                })
             })
             .flatten()
             .flatten()
