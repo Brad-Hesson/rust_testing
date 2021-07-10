@@ -21,6 +21,7 @@ impl<T> Deque<T> {
         let new_node = Rc::new(Node::from(elem));
         match &self.front {
             None => {
+                assert!(self.len() == 1);
                 assert!(self.back.is_none());
                 self.front = Some(new_node.clone());
                 self.back = Some(new_node);
@@ -37,6 +38,7 @@ impl<T> Deque<T> {
         let new_node = Rc::new(Node::from(elem));
         match &self.back {
             None => {
+                assert!(self.len() == 1);
                 assert!(self.front.is_none());
                 self.front = Some(new_node.clone());
                 self.back = Some(new_node);
@@ -50,7 +52,10 @@ impl<T> Deque<T> {
     }
     pub fn pop_front(&mut self) -> Option<T> {
         match self.front.take() {
-            None => None,
+            None => {
+                assert!(self.len() == 0);
+                None
+            }
             Some(node) => {
                 self.length -= 1;
                 self.front = node.prev.borrow().clone();
@@ -69,7 +74,10 @@ impl<T> Deque<T> {
     }
     pub fn pop_back(&mut self) -> Option<T> {
         match self.back.take() {
-            None => None,
+            None => {
+                assert!(self.len() == 0);
+                None
+            }
             Some(node) => {
                 self.length -= 1;
                 self.back = node.next.borrow().clone();
