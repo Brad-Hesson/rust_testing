@@ -1,17 +1,23 @@
 use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 pub struct Deque<T> {
+    length: usize,
     front: Option<Rc<Node<T>>>,
     back: Option<Rc<Node<T>>>,
 }
 impl<T> Deque<T> {
     pub fn new() -> Self {
         Self {
+            length: 0,
             front: None,
             back: None,
         }
     }
+    pub fn len(&self) -> usize {
+        self.length
+    }
     pub fn push_front(&mut self, elem: T) {
+        self.length += 1;
         let new_node = Rc::new(Node::from(elem));
         match &self.front {
             None => {
@@ -27,6 +33,7 @@ impl<T> Deque<T> {
         }
     }
     pub fn push_back(&mut self, elem: T) {
+        self.length += 1;
         let new_node = Rc::new(Node::from(elem));
         match &self.back {
             None => {
@@ -45,6 +52,7 @@ impl<T> Deque<T> {
         match self.front.take() {
             None => None,
             Some(node) => {
+                self.length -= 1;
                 self.front = node.prev.borrow().clone();
                 match node.prev.borrow().as_ref() {
                     // clear the prev node's link to our node
@@ -63,6 +71,7 @@ impl<T> Deque<T> {
         match self.back.take() {
             None => None,
             Some(node) => {
+                self.length -= 1;
                 self.back = node.next.borrow().clone();
                 match node.next.borrow().as_ref() {
                     // clear the next node's link to our node
