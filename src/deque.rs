@@ -59,7 +59,7 @@ impl<T> Deque<T> {
             Some(node) => {
                 self.length -= 1;
                 self.front = node.prev.borrow().clone();
-                match node.prev.borrow().as_ref() {
+                match node.prev.borrow().as_deref() {
                     // clear the prev node's link to our node
                     Some(prev_node) => prev_node.next.borrow_mut().take(),
                     // if there is no prev node, clear deque's back link to our node
@@ -81,7 +81,7 @@ impl<T> Deque<T> {
             Some(node) => {
                 self.length -= 1;
                 self.back = node.next.borrow().clone();
-                match node.next.borrow().as_ref() {
+                match node.next.borrow().as_deref() {
                     // clear the next node's link to our node
                     Some(next_node) => next_node.prev.borrow_mut().take(),
                     // if there is no next node, clear deque's front link to our node
@@ -95,37 +95,21 @@ impl<T> Deque<T> {
         }
     }
     pub fn peek_front(&self) -> Option<&T> {
-        self.front.as_ref().map(|node| &node.elem)
+        self.front.as_deref().map(|node| &node.elem)
     }
     pub fn peek_back(&self) -> Option<&T> {
-        self.back.as_ref().map(|node| &node.elem)
+        self.back.as_deref().map(|node| &node.elem)
     }
     pub fn peek_front_nth(&self, index: usize) -> Option<&T> {
         self.front
-            .as_ref()
-            .map(|rc| {
-                Node::walk(rc.clone(), index, false).map(|index_rc| {
-                    let ptr = Rc::into_raw(index_rc);
-                    let out = unsafe { ptr.as_ref().map(|n| &n.elem) };
-                    unsafe { drop(Rc::from_raw(ptr)) };
-                    out
-                })
-            })
-            .flatten()
+            .as_deref()
+            .map(|n| n.peek_front_nth(index))
             .flatten()
     }
     pub fn peek_back_nth(&self, index: usize) -> Option<&T> {
         self.back
-            .as_ref()
-            .map(|rc| {
-                Node::walk(rc.clone(), index, true).map(|index_rc| {
-                    let ptr = Rc::into_raw(index_rc);
-                    let out = unsafe { ptr.as_ref().map(|n| &n.elem) };
-                    unsafe { drop(Rc::from_raw(ptr)) };
-                    out
-                })
-            })
-            .flatten()
+            .as_deref()
+            .map(|n| n.peek_back_nth(index))
             .flatten()
     }
 }
@@ -156,23 +140,43 @@ struct Node<T> {
     prev: RefCell<Option<Rc<Node<T>>>>,
 }
 impl<T> Node<T> {
-    fn walk(rc: Rc<Node<T>>, index: usize, forward: bool) -> Option<Rc<Node<T>>> {
+    fn peek_front_nth(&self, index: usize) -> Option<&T> {
         if index == 0 {
-            return Some(rc);
+            return Some(&self.elem);
         }
-        if forward {
-            rc.next
-                .borrow()
-                .as_ref()
-                .map(|prev_rc| Self::walk(prev_rc.clone(), index - 1, forward))
-                .flatten()
-        } else {
-            rc.prev
-                .borrow()
-                .as_ref()
-                .map(|prev_rc| Self::walk(prev_rc.clone(), index - 1, forward))
-                .flatten()
+        self.prev
+            .borrow()
+            .as_ref()
+            .map(|n| {
+                let ptr = Rc::as_ptr(n);
+                let out = unsafe {
+                    ptr.as_ref()
+                        .map(|next_node| next_node.peek_front_nth(index - 1))
+                };
+                unsafe { drop(Rc::from_raw(ptr)) }
+                out
+            })
+            .flatten()
+            .flatten()
+    }
+    fn peek_back_nth(&self, index: usize) -> Option<&T> {
+        if index == 0 {
+            return Some(&self.elem);
         }
+        self.next
+            .borrow()
+            .as_ref()
+            .map(|n| {
+                let ptr = Rc::as_ptr(n);
+                let out = unsafe {
+                    ptr.as_ref()
+                        .map(|next_node| next_node.peek_back_nth(index - 1))
+                };
+                unsafe { drop(Rc::from_raw(ptr)) }
+                out
+            })
+            .flatten()
+            .flatten()
     }
 }
 impl<T> From<T> for Node<T> {
