@@ -144,39 +144,29 @@ impl<T> Node<T> {
         if index == 0 {
             return Some(&self.elem);
         }
-        self.prev
-            .borrow()
-            .as_ref()
-            .map(|n| {
-                let ptr = Rc::as_ptr(n);
-                let out = unsafe {
-                    ptr.as_ref()
-                        .map(|next_node| next_node.peek_front_nth(index - 1))
-                };
-                unsafe { drop(Rc::from_raw(ptr)) }
-                out
-            })
-            .flatten()
-            .flatten()
+        unsafe {
+            self.prev
+                .as_ptr()
+                .as_ref()
+                .map(Option::as_deref)
+                .flatten()
+                .map(|n| n.peek_front_nth(index - 1))
+                .flatten()
+        }
     }
     fn peek_back_nth(&self, index: usize) -> Option<&T> {
         if index == 0 {
             return Some(&self.elem);
         }
-        self.next
-            .borrow()
-            .as_ref()
-            .map(|n| {
-                let ptr = Rc::as_ptr(n);
-                let out = unsafe {
-                    ptr.as_ref()
-                        .map(|next_node| next_node.peek_back_nth(index - 1))
-                };
-                unsafe { drop(Rc::from_raw(ptr)) }
-                out
-            })
-            .flatten()
-            .flatten()
+        unsafe {
+            self.next
+                .as_ptr()
+                .as_ref()
+                .map(Option::as_deref)
+                .flatten()
+                .map(|n| n.peek_back_nth(index - 1))
+                .flatten()
+        }
     }
 }
 impl<T> From<T> for Node<T> {
