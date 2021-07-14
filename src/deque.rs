@@ -179,6 +179,17 @@ impl<T: Debug> Debug for Node<T> {
 mod tests {
     use super::*;
 
+    fn prepare_deque() -> Deque<usize> {
+        let mut d: Deque<usize> = Deque::new();
+        d.push_back(3);
+        d.push_back(4);
+        d.push_back(5);
+        d.push_front(2);
+        d.push_front(1);
+        d.push_front(0);
+        d
+    }
+
     #[test]
     fn deque_push_front_test() {
         let mut d = Deque::<usize>::new();
@@ -211,23 +222,17 @@ mod tests {
     }
     #[test]
     fn deque_pop_front_back_test() {
-        let mut deq: Deque<i32> = Deque::new();
-        deq.push_back(3);
-        deq.push_back(4);
-        deq.push_back(5);
-        deq.push_front(2);
-        deq.push_front(1);
-        deq.push_front(0);
-        assert_eq!(deq.pop_back(), Some(5));
-        assert_eq!(deq.pop_front(), Some(0));
-        assert_eq!(deq.pop_back(), Some(4));
-        assert_eq!(deq.pop_front(), Some(1));
-        assert_eq!(deq.pop_back(), Some(3));
-        deq.push_front(9);
-        assert_eq!(deq.pop_back(), Some(2));
-        assert_eq!(deq.pop_back(), Some(9));
-        assert_eq!(deq.pop_back(), None);
-        assert_eq!(deq.pop_front(), None);
+        let mut d = prepare_deque();
+        assert_eq!(d.pop_back(), Some(5));
+        assert_eq!(d.pop_front(), Some(0));
+        assert_eq!(d.pop_back(), Some(4));
+        assert_eq!(d.pop_front(), Some(1));
+        assert_eq!(d.pop_back(), Some(3));
+        d.push_front(9);
+        assert_eq!(d.pop_back(), Some(2));
+        assert_eq!(d.pop_back(), Some(9));
+        assert_eq!(d.pop_back(), None);
+        assert_eq!(d.pop_front(), None);
     }
     #[test]
     fn deque_peek_test() {
@@ -247,13 +252,7 @@ mod tests {
     }
     #[test]
     fn deque_peek_front_nth_test() {
-        let mut d: Deque<i32> = Deque::new();
-        d.push_back(3);
-        d.push_back(4);
-        d.push_back(5);
-        d.push_front(2);
-        d.push_front(1);
-        d.push_front(0);
+        let d = prepare_deque();
         assert_eq!(d.peek_front_nth(0), Some(&0));
         assert_eq!(d.peek_front_nth(1), Some(&1));
         assert_eq!(d.peek_front_nth(2), Some(&2));
@@ -264,13 +263,7 @@ mod tests {
     }
     #[test]
     fn deque_peek_back_nth_test() {
-        let mut d: Deque<i32> = Deque::new();
-        d.push_back(3);
-        d.push_back(4);
-        d.push_back(5);
-        d.push_front(2);
-        d.push_front(1);
-        d.push_front(0);
+        let d = prepare_deque();
         assert_eq!(d.peek_back_nth(0), Some(&5));
         assert_eq!(d.peek_back_nth(1), Some(&4));
         assert_eq!(d.peek_back_nth(2), Some(&3));
