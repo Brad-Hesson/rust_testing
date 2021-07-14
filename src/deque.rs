@@ -95,22 +95,16 @@ impl<T> Deque<T> {
         }
     }
     pub fn peek_front(&self) -> Option<&T> {
-        self.front.as_deref().map(|node| &node.elem)
+        self.peek_front_nth(0)
     }
     pub fn peek_back(&self) -> Option<&T> {
-        self.back.as_deref().map(|node| &node.elem)
+        self.peek_back_nth(0)
     }
     pub fn peek_front_nth(&self, index: usize) -> Option<&T> {
-        self.front
-            .as_deref()
-            .map(|n| n.peek_front_nth(index))
-            .flatten()
+        self.front.as_deref()?.peek_front_nth(index)
     }
     pub fn peek_back_nth(&self, index: usize) -> Option<&T> {
-        self.back
-            .as_deref()
-            .map(|n| n.peek_back_nth(index))
-            .flatten()
+        self.back.as_deref()?.peek_back_nth(index)
     }
 }
 impl<T: Debug> Debug for Deque<T> {
@@ -147,11 +141,9 @@ impl<T> Node<T> {
         unsafe {
             self.prev
                 .as_ptr()
-                .as_ref()
-                .map(Option::as_deref)
-                .flatten()
-                .map(|n| n.peek_front_nth(index - 1))
-                .flatten()
+                .as_ref()?
+                .as_deref()?
+                .peek_front_nth(index - 1)
         }
     }
     fn peek_back_nth(&self, index: usize) -> Option<&T> {
@@ -161,11 +153,9 @@ impl<T> Node<T> {
         unsafe {
             self.next
                 .as_ptr()
-                .as_ref()
-                .map(Option::as_deref)
-                .flatten()
-                .map(|n| n.peek_back_nth(index - 1))
-                .flatten()
+                .as_ref()?
+                .as_deref()?
+                .peek_back_nth(index - 1)
         }
     }
 }
