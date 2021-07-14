@@ -138,25 +138,23 @@ impl<T> Node<T> {
         if index == 0 {
             return Some(&self.elem);
         }
-        unsafe {
-            self.prev
-                .as_ptr()
-                .as_ref()?
-                .as_deref()?
-                .peek_front_nth(index - 1)
-        }
+        let ptr = self.prev.as_ptr();
+        let ptr_ref = unsafe { ptr.as_ref() };
+        ptr_ref
+            .expect(&format!("Referenced null pointer at index {}", index))
+            .as_deref()?
+            .peek_front_nth(index - 1)
     }
     fn peek_back_nth(&self, index: usize) -> Option<&T> {
         if index == 0 {
             return Some(&self.elem);
         }
-        unsafe {
-            self.next
-                .as_ptr()
-                .as_ref()?
-                .as_deref()?
-                .peek_back_nth(index - 1)
-        }
+        let ptr = self.next.as_ptr();
+        let ptr_ref = unsafe { ptr.as_ref() };
+        ptr_ref
+            .expect(&format!("Referenced null pointer at index {}", index))
+            .as_deref()?
+            .peek_back_nth(index - 1)
     }
 }
 impl<T> From<T> for Node<T> {
