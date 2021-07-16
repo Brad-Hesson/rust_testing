@@ -30,6 +30,11 @@ impl<T> List<T> {
         }
     }
 }
+impl<T> Default for List<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[cfg(test)]
 mod tests {

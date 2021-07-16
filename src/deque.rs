@@ -16,6 +16,9 @@ impl<T> Deque<T> {
     pub fn len(&self) -> usize {
         self.length
     }
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
+    }
     pub fn push_front(&mut self, elem: T) {
         self.length += 1;
         let new_node = Rc::new(Node::from(elem));
@@ -53,7 +56,7 @@ impl<T> Deque<T> {
     pub fn pop_front(&mut self) -> Option<T> {
         match self.front.take() {
             None => {
-                assert!(self.len() == 0);
+                assert!(self.is_empty());
                 None
             }
             Some(node) => {
@@ -75,7 +78,7 @@ impl<T> Deque<T> {
     pub fn pop_back(&mut self) -> Option<T> {
         match self.back.take() {
             None => {
-                assert!(self.len() == 0);
+                assert!(self.is_empty());
                 None
             }
             Some(node) => {
@@ -127,6 +130,11 @@ impl<T> DoubleEndedIterator for Deque<T> {
         self.pop_back()
     }
 }
+impl<T> Default for Deque<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 struct Node<T> {
     elem: T,
@@ -141,7 +149,7 @@ impl<T> Node<T> {
         let ptr = self.prev.as_ptr();
         let ptr_ref = unsafe { ptr.as_ref() };
         ptr_ref
-            .expect(&format!("Referenced null pointer at index {}", index))
+            .unwrap_or_else(|| panic!("Referenced null pointer at index {}", index))
             .as_deref()?
             .peek_front_nth(index - 1)
     }
@@ -152,7 +160,7 @@ impl<T> Node<T> {
         let ptr = self.next.as_ptr();
         let ptr_ref = unsafe { ptr.as_ref() };
         ptr_ref
-            .expect(&format!("Referenced null pointer at index {}", index))
+            .unwrap_or_else(|| panic!("Referenced null pointer at index {}", index))
             .as_deref()?
             .peek_back_nth(index - 1)
     }

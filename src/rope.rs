@@ -30,6 +30,9 @@ impl Rope {
     pub fn len(&self) -> usize {
         self.inner.len()
     }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     pub fn get_string(&self) -> String {
         self.inner.get_string()
     }
@@ -53,7 +56,16 @@ impl Rope {
         let new = Self::concat(left, right);
         drop(std::mem::replace(self, new));
     }
-    pub fn index(&self, index: usize) -> &str {
+}
+impl Default for Rope {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl std::ops::Index<usize> for Rope {
+    type Output = str;
+
+    fn index(&self, index: usize) -> &Self::Output {
         self.inner.index(index)
     }
 }
@@ -180,7 +192,7 @@ impl RopeInner {
     fn index(&self, index: usize) -> &str {
         assert!(
             index < self.len(),
-            "index {} out of bounds of Rope with length {}",
+            "Index {} out of bounds of Rope with length {}",
             index,
             self.len()
         );
@@ -258,7 +270,7 @@ mod tests {
     #[test]
     fn rope_index_test() {
         let (r, s) = setup_rope();
-        let clsr = |i: usize| assert_eq!(r.index(i), s[i..(i + 1)].to_string());
+        let clsr = |i: usize| assert_eq!(r[i], s[i..(i + 1)].to_string());
         (0..s.len()).for_each(clsr);
     }
 }
