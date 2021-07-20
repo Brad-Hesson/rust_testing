@@ -1,51 +1,96 @@
-use std::iter::Peekable;
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    iter::Peekable,
+    rc::Rc,
+};
 
 use regex::Regex;
 
-struct Tokenizer<'s> {
-    source: &'s str,
+struct Tokenizer {
+    source: String,
     patterns: Regex,
 }
 
-impl<'s> Iterator for Tokenizer<'s> {
-    type Item = &'s str;
-    fn next(&mut self) -> Option<&'s str> {
-        let mat = self.patterns.find(self.source)?;
-        let found = &self.source[mat.range()];
-        self.source = &self.source[mat.end()..];
+impl Iterator for Tokenizer {
+    type Item = String;
+    fn next(&mut self) -> Option<String> {
+        let mat = self.patterns.find(&self.source)?;
+        let found = self.source[mat.range()].to_string();
+        self.source = self.source[mat.end()..].to_string();
         Some(found)
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
 struct ObjSymbol {
     name: String,
 }
-
-#[derive(Debug)]
-struct ObjNumber {
-    value: isize,
+impl Display for ObjSymbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.name, f)
+    }
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
+struct ObjNumber {
+    value: f64,
+}
+impl Debug for ObjNumber {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.value, f)
+    }
+}
+
+#[derive(Clone)]
 enum ObjAtom {
     Symbol(ObjSymbol),
     Number(ObjNumber),
 }
+impl Debug for ObjAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ObjAtom::Symbol(symbol) => symbol.fmt(f),
+            ObjAtom::Number(number) => number.fmt(f),
+        }
+    }
+}
 
-#[derive(Debug)]
+#[derive(Clone)]
 struct ObjList {
     list: Vec<ObjExpr>,
 }
+impl Debug for ObjList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("(")?;
+        for expr in &self.list {
+            f.write_str(&format!(" {:?}", expr))?;
+        }
+        f.write_str(" )")
+    }
+}
 
-#[derive(Debug)]
+#[derive(Clone)]
 enum ObjExpr {
     Atom(ObjAtom),
     List(ObjList),
 }
+impl From<f64> for ObjExpr {
+    fn from(n: f64) -> Self {
+        ObjExpr::Atom(ObjAtom::Number(ObjNumber { value: n }))
+    }
+}
+impl Debug for ObjExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ObjExpr::Atom(atom) => atom.fmt(f),
+            ObjExpr::List(list) => list.fmt(f),
+        }
+    }
+}
 
-fn parse_into_expr<'a, I: Iterator<Item = &'a str>>(tokens: &mut Peekable<I>) -> Option<ObjExpr> {
-    match *(tokens.peek()?) {
+fn parse_into_expr<I: Iterator<Item = String>>(tokens: &mut Peekable<I>) -> Option<ObjExpr> {
+    match tokens.peek()?.as_str() {
         ")" => None,
         "(" => {
             tokens.next();
@@ -53,20 +98,101 @@ fn parse_into_expr<'a, I: Iterator<Item = &'a str>>(tokens: &mut Peekable<I>) ->
             while let Some(expr) = parse_into_expr(tokens) {
                 list.push(expr);
             }
-            assert_eq!(tokens.next(), Some(")"));
-            Some(ObjExpr::List(ObjList { list }))
+            assert_eq!(tokens.next(), Some(")".to_string()));
+            Some(ObjExpr::List(ObjList { list: list }))
         }
         _ => {
             let tok = tokens.next()?;
-            let atom = if let Ok(value) = tok.parse::<isize>() {
+            let atom = if let Ok(value) = tok.parse::<f64>() {
                 ObjAtom::Number(ObjNumber { value })
             } else {
-                ObjAtom::Symbol(ObjSymbol {
-                    name: tok.to_string(),
-                })
+                ObjAtom::Symbol(ObjSymbol { name: tok })
             };
             Some(ObjExpr::Atom(atom))
         }
+    }
+}
+
+struct Env {
+    vars: HashMap<String, Rc<dyn Fn(ObjList) -> ObjExpr>>,
+}
+
+impl Env {
+    fn new() -> Self {
+        let mut vars: HashMap<String, Rc<dyn Fn(ObjList) -> ObjExpr>> = HashMap::new();
+        vars.insert(
+            "*".to_string(),
+            Rc::new(|v| match &v.list[..] {
+                [ObjExpr::Atom(ObjAtom::Number(left)), ObjExpr::Atom(ObjAtom::Number(right))] => {
+                    ObjExpr::from(left.value * right.value)
+                }
+                _ => panic!("Wrong args for `*`, got `{:?}`", v),
+            }),
+        );
+        vars.insert("pi".to_string(), Rc::new(|_| ObjExpr::from(3.14159)));
+        Self { vars }
+    }
+}
+
+fn eval_expr(expr: ObjExpr, env: &mut Env) -> ObjExpr {
+    match expr {
+        ObjExpr::List(ObjList { list }) => {
+            if let Some((first, args_list)) = list.split_first() {
+                if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = first {
+                    eprintln!("Got proc `{}` with args: {:?}", name, args_list);
+                    match name.as_str() {
+                        "begin" => args_list
+                            .iter()
+                            .map(|expr| eval_expr(expr.clone(), env))
+                            .last()
+                            .expect("Got begin proc with no args"),
+                        "define" => {
+                            assert!(
+                                args_list.len() == 2,
+                                "define takes a symbol and an expression as arguments, got `{:?}`",
+                                args_list
+                            );
+                            if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) =
+                                args_list[0].clone()
+                            {
+                                let expr = args_list[1].clone();
+                                let rc = Rc::new(move |_| expr.clone());
+                                env.vars.insert(name.clone(), rc);
+                                ObjExpr::from(1.0)
+                            } else {
+                                panic!(
+                                    "First argument of `define` must be a symbol, got `{:?}`",
+                                    args_list[0]
+                                );
+                            }
+                        }
+                        _ => {
+                            let func = env
+                                .vars
+                                .get(name)
+                                .expect(&format!("Proc `{}` does not exist", name))
+                                .clone();
+                            let args = args_list
+                                .iter()
+                                .map(|expr| eval_expr(expr.clone(), env))
+                                .collect();
+                            func(ObjList { list: args })
+                        }
+                    }
+                } else {
+                    unimplemented!("First element of a list must be a symbol")
+                }
+            } else {
+                unimplemented!("Got an empty list");
+            }
+        }
+        ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) => env
+            .vars
+            .get(&name)
+            .expect(&format!("Variable `{}` does not exist", name))(
+            ObjList { list: vec![] }
+        ),
+        expr => expr,
     }
 }
 
@@ -74,9 +200,18 @@ fn parse_into_expr<'a, I: Iterator<Item = &'a str>>(tokens: &mut Peekable<I>) ->
 fn it_works() {
     let source = "(begin (define r 10) (* pi (* r r)))";
     let mut tokenizer = Tokenizer {
-        source,
+        source: source.to_string(),
         patterns: Regex::new(r"\(|\)|[^\s()]+").unwrap(),
-    }.peekable();
-    let expr = parse_into_expr(&mut tokenizer);
-    eprintln!("{:#?}", expr);
+    }
+    .peekable();
+    let expr = parse_into_expr(&mut tokenizer).unwrap();
+    let mut env = Env::new();
+    let out = eval_expr(expr, &mut env);
+    eprintln!("{:#?}", out);
+}
+
+#[test]
+fn test() {
+    let mut a = vec![0, 1, 2];
+    eprintln!("{:?}", a.pop());
 }
