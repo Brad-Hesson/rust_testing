@@ -144,85 +144,85 @@ fn eval_expr(expr: ObjExpr, env: &mut Env) -> ObjExpr {
             ObjList { list: vec![] }
         ),
         ObjExpr::List(ObjList { list }) => {
-            if let Some((first, args_list)) = list.split_first() {
-                if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = first {
-                    eprintln!("Got proc `{}` with args: {:?}", name, args_list);
-                    match name.as_str() {
-                        "begin" => args_list
-                            .iter()
-                            .map(|expr| eval_expr(expr.clone(), env))
-                            .last()
-                            .expect("Got begin proc with no args"),
-                        "define" => {
-                            assert!(
-                                args_list.len() == 2,
-                                "define takes a symbol and an expression as arguments, got `{:?}`",
-                                args_list
-                            );
-                            let name = if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) =
-                                args_list[0].clone()
-                            {
-                                name
-                            } else {
-                                panic!(
-                                    "First argument of `define` must be a symbol, got `{:?}`",
-                                    args_list[0]
-                                );
-                            };
-                            let expr = eval_expr(args_list[1].clone(), env);
-                            let rc = Rc::new(move |_| expr.clone());
-                            env.vars.insert(name.clone(), rc);
-                            ObjExpr::List(ObjList { list: vec![] })
-                        }
-                        "if" => {
-                            assert!(
-                                args_list.len() == 3,
-                                "`if` takes a condition, and two expressions as arguments, got `{:?}`",
-                                args_list
-                            );
-                            let cond = if let ObjExpr::Atom(ObjAtom::Number(ObjNumber { value })) =
-                                eval_expr(args_list[0].clone(), env)
-                            {
-                                value != 0.0
-                            } else {
-                                panic!("Got invalid if condition: `{:?}`", args_list[0])
-                            };
-                            if cond {
-                                args_list[1].clone()
-                            } else {
-                                args_list[2].clone()
-                            }
-                        }
-                        "quote" => {
-                            assert!(
-                                args_list.len() == 1,
-                                "`quote` takes one expression as an argument, got `{:?}`",
-                                args_list
-                            );
-                            args_list[0].clone()
-                        }
-                        _ => {
-                            let func = env
-                                .vars
-                                .get(name)
-                                .expect(&format!("Proc `{}` does not exist", name))
-                                .clone();
-                            let args = args_list
-                                .iter()
-                                .map(|expr| eval_expr(expr.clone(), env))
-                                .collect();
-                            func(ObjList { list: args })
-                        }
-                    }
-                } else {
-                    unimplemented!("First element of a list must be a symbol")
-                }
+            let (first, args_list) = if let Some((f, a)) = list.split_first() {
+                (f, a)
             } else {
-                unimplemented!("Got an empty list");
+                panic!("Got an empty list");
+            };
+            let name = if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = first {
+                name
+            } else {
+                panic!("First element of a list must be a symbol")
+            };
+            eprintln!("Got proc `{}` with args: {:?}", name, args_list);
+            match name.as_str() {
+                "begin" => args_list
+                    .iter()
+                    .map(|expr| eval_expr(expr.clone(), env))
+                    .last()
+                    .expect("Got begin proc with no args"),
+                "define" => {
+                    assert_arity("define", 2, args_list);
+                    let name = if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) =
+                        args_list[0].clone()
+                    {
+                        name
+                    } else {
+                        panic!(
+                            "First argument of `define` must be a symbol, got `{:?}`",
+                            args_list[0]
+                        );
+                    };
+                    let expr = eval_expr(args_list[1].clone(), env);
+                    let rc = Rc::new(move |_| expr.clone());
+                    env.vars.insert(name.clone(), rc);
+                    ObjExpr::List(ObjList { list: vec![] })
+                }
+                "if" => {
+                    assert_arity("if", 3, args_list);
+                    let cond = if let ObjExpr::Atom(ObjAtom::Number(ObjNumber { value })) =
+                        eval_expr(args_list[0].clone(), env)
+                    {
+                        value != 0.0
+                    } else {
+                        panic!("Got invalid if condition: `{:?}`", args_list[0])
+                    };
+                    if cond {
+                        eval_expr(args_list[1].clone(), env)
+                    } else {
+                        eval_expr(args_list[2].clone(), env)
+                    }
+                }
+                "quote" => {
+                    assert_arity("quote", 1, args_list);
+                    args_list[0].clone()
+                }
+                _ => {
+                    let func = env
+                        .vars
+                        .get(name)
+                        .expect(&format!("Proc `{}` does not exist", name))
+                        .clone();
+                    let args = args_list
+                        .iter()
+                        .map(|expr| eval_expr(expr.clone(), env))
+                        .collect();
+                    func(ObjList { list: args })
+                }
             }
         }
         expr => expr,
     }
+}
+
+fn assert_arity(fname: &str, arity: usize, args_list: &[ObjExpr]) {
+    assert!(
+        args_list.len() == arity,
+        "`{}` takes {} expression(s) as an argument, got `{:?}`",
+        fname,
+        arity,
+        args_list
+    );
 }
 
 #[test]
