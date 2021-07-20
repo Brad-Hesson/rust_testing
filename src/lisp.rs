@@ -45,9 +45,9 @@ enum ObjExpr {
 }
 
 fn parse_into_expr<'a, I: Iterator<Item = &'a str>>(tokens: &mut Peekable<I>) -> Option<ObjExpr> {
-    match tokens.peek()? {
-        &")" => None,
-        &"(" => {
+    match *(tokens.peek()?) {
+        ")" => None,
+        "(" => {
             tokens.next();
             let mut list = Vec::new();
             while let Some(expr) = parse_into_expr(tokens) {
