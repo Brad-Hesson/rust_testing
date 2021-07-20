@@ -225,30 +225,31 @@ fn assert_arity(fname: &str, arity: usize, args_list: &[ObjExpr]) {
     );
 }
 
-#[test]
-fn it_works() {
-    let source = "(begin (define r 10) (* pi (* r r)))";
+fn parse_lisp(source: &str) -> ObjExpr {
     let mut tokenizer = Tokenizer {
         source: source.to_string(),
         patterns: Regex::new(r"\(|\)|[^\s()]+").unwrap(),
     }
     .peekable();
-    let expr = parse_into_expr(&mut tokenizer).unwrap();
+    parse_into_expr(&mut tokenizer).unwrap()
+}
+
+fn run_lisp(source: &str, env: &mut Env) -> ObjExpr {
+    let expr = parse_lisp(source);
+    eval_expr(expr, env)
+}
+
+#[test]
+fn it_works() {
     let mut env = Env::new();
-    let out = eval_expr(expr, &mut env);
+    let out = run_lisp("(begin (define r 10) (* pi (* r r)))", &mut env);
     eprintln!("{:#?}", out);
 }
 
 #[test]
 fn if_test() {
-    let source = "(begin (define b 1) (if b (* 2 5) 20))";
-    let mut tokenizer = Tokenizer {
-        source: source.to_string(),
-        patterns: Regex::new(r"\(|\)|[^\s()]+").unwrap(),
-    }
-    .peekable();
-    let expr = parse_into_expr(&mut tokenizer).unwrap();
     let mut env = Env::new();
-    let out = eval_expr(expr, &mut env);
+    run_lisp("(define b 1)", &mut env);
+    let out = run_lisp("(if b (* 2 5) 20)", &mut env);
     eprintln!("{:#?}", out);
 }
