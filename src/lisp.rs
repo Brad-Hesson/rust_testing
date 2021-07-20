@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    env::args,
     fmt::{Debug, Display},
     iter::Peekable,
     rc::Rc,
@@ -136,6 +137,12 @@ impl Env {
 
 fn eval_expr(expr: ObjExpr, env: &mut Env) -> ObjExpr {
     match expr {
+        ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) => env
+            .vars
+            .get(&name)
+            .expect(&format!("Variable `{}` does not exist", name))(
+            ObjList { list: vec![] }
+        ),
         ObjExpr::List(ObjList { list }) => {
             if let Some((first, args_list)) = list.split_first() {
                 if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = first {
@@ -152,19 +159,47 @@ fn eval_expr(expr: ObjExpr, env: &mut Env) -> ObjExpr {
                                 "define takes a symbol and an expression as arguments, got `{:?}`",
                                 args_list
                             );
-                            if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) =
+                            let name = if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) =
                                 args_list[0].clone()
                             {
-                                let expr = args_list[1].clone();
-                                let rc = Rc::new(move |_| expr.clone());
-                                env.vars.insert(name.clone(), rc);
-                                ObjExpr::from(1.0)
+                                name
                             } else {
                                 panic!(
                                     "First argument of `define` must be a symbol, got `{:?}`",
                                     args_list[0]
                                 );
+                            };
+                            let expr = eval_expr(args_list[1].clone(), env);
+                            let rc = Rc::new(move |_| expr.clone());
+                            env.vars.insert(name.clone(), rc);
+                            ObjExpr::List(ObjList { list: vec![] })
+                        }
+                        "if" => {
+                            assert!(
+                                args_list.len() == 3,
+                                "`if` takes a condition, and two expressions as arguments, got `{:?}`",
+                                args_list
+                            );
+                            let cond = if let ObjExpr::Atom(ObjAtom::Number(ObjNumber { value })) =
+                                eval_expr(args_list[0].clone(), env)
+                            {
+                                value != 0.0
+                            } else {
+                                panic!("Got invalid if condition: `{:?}`", args_list[0])
+                            };
+                            if cond {
+                                args_list[1].clone()
+                            } else {
+                                args_list[2].clone()
                             }
+                        }
+                        "quote" => {
+                            assert!(
+                                args_list.len() == 1,
+                                "`quote` takes one expression as an argument, got `{:?}`",
+                                args_list
+                            );
+                            args_list[0].clone()
                         }
                         _ => {
                             let func = env
@@ -186,12 +221,6 @@ fn eval_expr(expr: ObjExpr, env: &mut Env) -> ObjExpr {
                 unimplemented!("Got an empty list");
             }
         }
-        ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) => env
-            .vars
-            .get(&name)
-            .expect(&format!("Variable `{}` does not exist", name))(
-            ObjList { list: vec![] }
-        ),
         expr => expr,
     }
 }
@@ -211,7 +240,15 @@ fn it_works() {
 }
 
 #[test]
-fn test() {
-    let mut a = vec![0, 1, 2];
-    eprintln!("{:?}", a.pop());
+fn if_test() {
+    let source = "(begin (define b 1) (if b (* 2 5) 20))";
+    let mut tokenizer = Tokenizer {
+        source: source.to_string(),
+        patterns: Regex::new(r"\(|\)|[^\s()]+").unwrap(),
+    }
+    .peekable();
+    let expr = parse_into_expr(&mut tokenizer).unwrap();
+    let mut env = Env::new();
+    let out = eval_expr(expr, &mut env);
+    eprintln!("{:#?}", out);
 }
