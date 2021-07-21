@@ -269,13 +269,13 @@ fn eval_lambda(args_list: &[ObjExpr], env: Env) -> ObjExpr {
     let arity = arg_names.len();
     let func = move |fn_args_list: ObjList, fn_env: Env| {
         assert_arity("lambda", arity, &fn_args_list.list);
-        let loc_env = fn_env.clone_deep();
+        let clone_env = fn_env.clone_deep();
         Iterator::zip(arg_names.iter(), fn_args_list.list).for_each(|(name, expr)| {
             let expr = eval_expr(expr.clone(), fn_env.clone());
             let rc = Rc::new(move |_, _| expr.clone());
-            loc_env.vars.borrow_mut().insert(name.clone(), rc);
+            clone_env.vars.borrow_mut().insert(name.clone(), rc);
         });
-        eval_expr(expr.clone(), loc_env)
+        eval_expr(expr.clone(), clone_env)
     };
     ObjExpr::Lambda(ObjLambda {
         func: Rc::new(func),
