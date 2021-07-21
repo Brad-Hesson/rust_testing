@@ -75,7 +75,6 @@ impl Debug for ObjList {
 #[derive(Clone)]
 struct ObjLambda {
     func: Rc<dyn Fn(ObjList, Env) -> ObjExpr>,
-    args: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -172,7 +171,7 @@ fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
             };
             let name = if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = first {
                 name
-            } else if let ObjExpr::Lambda(ObjLambda { func, args: _ }) =
+            } else if let ObjExpr::Lambda(ObjLambda { func }) =
                 eval_expr(first.clone(), env.clone())
             {
                 return func(
@@ -207,7 +206,7 @@ fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
                         );
                     };
                     let expr = eval_expr(args_list[1].clone(), env.clone());
-                    if let ObjExpr::Lambda(ObjLambda { func, args: _ }) = expr {
+                    if let ObjExpr::Lambda(ObjLambda { func }) = expr {
                         env.vars.borrow_mut().insert(name.clone(), func);
                     } else {
                         let rc = Rc::new(move |_, _| expr.clone());
@@ -252,26 +251,22 @@ fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
                             args_list[0]
                         )
                     };
-                    let arg_names_clone = arg_names.clone();
                     let expr = args_list[1].clone();
                     let arity = arg_names.len();
                     let func = move |fn_args_list: ObjList, fn_env: Env| {
                         assert_arity("lambda", arity, &fn_args_list.list);
                         let loc_env = fn_env.clone_deep();
-                        Iterator::zip(arg_names_clone.iter(), fn_args_list.list).for_each(
+                        Iterator::zip(arg_names.iter(), fn_args_list.list).for_each(
                             |(name, expr)| {
                                 let expr = eval_expr(expr.clone(), fn_env.clone());
                                 let rc = Rc::new(move |_, _| expr.clone());
                                 loc_env.vars.borrow_mut().insert(name.clone(), rc);
                             },
                         );
-                        
-                        let out = eval_expr(expr.clone(), loc_env);
-                        out
+                        eval_expr(expr.clone(), loc_env)
                     };
                     ObjExpr::Lambda(ObjLambda {
                         func: Rc::new(func),
-                        args: arg_names.clone(),
                     })
                 }
                 _ => {
@@ -351,10 +346,7 @@ fn lambda_test() {
 #[test]
 fn lambda_define_test() {
     let env = Env::new();
-    run_lisp(
-        "(define square (lambda (r) (* r r)))",
-        env.clone(),
-    );
+    run_lisp("(define square (lambda (r) (* r r)))", env.clone());
     let out = run_lisp("(square 2)", env.clone());
     eprintln!("{:?}", out);
     assert_eq!(format!("{:?}", out), "4");
