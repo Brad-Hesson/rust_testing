@@ -26,7 +26,7 @@ impl Iterator for Tokenizer {
 }
 
 #[derive(Clone)]
-struct ObjSymbol {
+pub struct ObjSymbol {
     name: String,
 }
 impl Display for ObjSymbol {
@@ -36,7 +36,7 @@ impl Display for ObjSymbol {
 }
 
 #[derive(Clone)]
-struct ObjNumber {
+pub struct ObjNumber {
     value: f64,
 }
 impl Debug for ObjNumber {
@@ -46,7 +46,7 @@ impl Debug for ObjNumber {
 }
 
 #[derive(Clone)]
-enum ObjAtom {
+pub enum ObjAtom {
     Symbol(ObjSymbol),
     Number(ObjNumber),
 }
@@ -60,7 +60,7 @@ impl Debug for ObjAtom {
 }
 
 #[derive(Clone)]
-struct ObjList {
+pub struct ObjList {
     list: Vec<ObjExpr>,
 }
 impl Debug for ObjList {
@@ -74,12 +74,12 @@ impl Debug for ObjList {
 }
 
 #[derive(Clone)]
-struct ObjLambda {
+pub struct ObjLambda {
     func: Rc<dyn Fn(ObjList, Env) -> ObjExpr>,
 }
 
 #[derive(Clone)]
-enum ObjExpr {
+pub enum ObjExpr {
     Atom(ObjAtom),
     List(ObjList),
     Lambda(ObjLambda),
@@ -313,7 +313,7 @@ fn assert_arity(fname: &str, arity: usize, args_list: &[ObjExpr]) {
     );
 }
 
-fn parse_lisp(source: &str) -> ObjExpr {
+pub fn parse_lisp(source: &str) -> ObjExpr {
     let mut tokenizer = Tokenizer {
         source: source.to_string(),
         patterns: Regex::new(r"\(|\)|[^\s()]+").unwrap(),
@@ -322,7 +322,7 @@ fn parse_lisp(source: &str) -> ObjExpr {
     parse_into_expr(&mut tokenizer).unwrap()
 }
 
-fn run_lisp(source: &str, env: Env) -> ObjExpr {
+pub fn run_lisp(source: &str, env: Env) -> ObjExpr {
     let expr = parse_lisp(source);
     eval_expr(expr, env)
 }
