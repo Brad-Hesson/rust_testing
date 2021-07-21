@@ -329,7 +329,7 @@ fn run_lisp(source: &str, env: Env) -> ObjExpr {
 
 #[test]
 fn it_works() {
-    let mut env = Env::new();
+    let env = Env::new();
     let out = run_lisp("(begin (define r 10) (* pi (* r r)))", env);
     eprintln!("{:#?}", out);
     assert_eq!(format!("{:?}", out), "314.159")
@@ -337,7 +337,7 @@ fn it_works() {
 
 #[test]
 fn if_test() {
-    let mut env = Env::new();
+    let env = Env::new();
 
     run_lisp("(define b 1)", env.clone());
     let out = run_lisp("(if b (* 2 5) 20)", env.clone());
