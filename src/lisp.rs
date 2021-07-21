@@ -1,11 +1,5 @@
 use core::panic;
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    fmt::{Debug, Display},
-    iter::Peekable,
-    rc::Rc,
-};
+use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::{Debug, Display}, iter::Peekable, rc::Rc};
 
 use regex::Regex;
 
@@ -226,10 +220,10 @@ fn eval_define(args_list: &[ObjExpr], env: Env) -> ObjExpr {
     };
     let expr = eval_expr(args_list[1].clone(), env.clone());
     if let ObjExpr::Lambda(ObjLambda { func }) = expr {
-        env.vars.borrow_mut().insert(name.clone(), func);
+        env.vars.borrow_mut().insert(name, func);
     } else {
         let rc = Rc::new(move |_, _| expr.clone());
-        env.vars.borrow_mut().insert(name.clone(), rc);
+        env.vars.borrow_mut().insert(name, rc);
     }
     ObjExpr::List(ObjList { list: vec![] })
 }
@@ -243,9 +237,9 @@ fn eval_if(args_list: &[ObjExpr], env: Env) -> ObjExpr {
         panic!("Got invalid if condition: `{:?}`", args_list[0])
     };
     if cond {
-        eval_expr(args_list[1].clone(), env.clone())
+        eval_expr(args_list[1].clone(), env)
     } else {
-        eval_expr(args_list[2].clone(), env.clone())
+        eval_expr(args_list[2].clone(), env)
     }
 }
 fn eval_quote(args_list: &[ObjExpr]) -> ObjExpr {
@@ -254,7 +248,7 @@ fn eval_quote(args_list: &[ObjExpr]) -> ObjExpr {
 }
 fn eval_lambda(args_list: &[ObjExpr]) -> ObjExpr {
     assert_arity("lambda", 2, args_list);
-    let arg_names: Vec<String> = if let ObjExpr::List(ObjList { list }) = args_list[0].clone() {
+    let arg_names: Cow<[String]> = if let ObjExpr::List(ObjList { list }) = args_list[0].clone() {
         list.iter()
             .map(|expr| {
                 if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = expr {
@@ -273,20 +267,19 @@ fn eval_lambda(args_list: &[ObjExpr]) -> ObjExpr {
             args_list[0]
         )
     };
-    let expr = args_list[1].clone();
     let arity = arg_names.len();
-    let func = move |fn_args_list: ObjList, fn_env: Env| {
-        assert_arity("lambda", arity, &fn_args_list.list);
-        let clone_env = fn_env.clone_deep();
-        Iterator::zip(arg_names.iter(), fn_args_list.list).for_each(|(name, expr)| {
-            let expr = eval_expr(expr.clone(), fn_env.clone());
-            let rc = Rc::new(move |_, _| expr.clone());
-            clone_env.vars.borrow_mut().insert(name.clone(), rc);
-        });
-        eval_expr(expr.clone(), clone_env)
-    };
+    let lambda_expr = args_list[1].clone();
     ObjExpr::Lambda(ObjLambda {
-        func: Rc::new(func),
+        func: Rc::new(move |fn_args_list: ObjList, fn_env: Env| {
+            assert_arity("lambda", arity, &fn_args_list.list);
+            let clone_env = fn_env.clone_deep();
+            Iterator::zip(arg_names.iter(), fn_args_list.list).for_each(|(arg_name, arg_expr)| {
+                let arg_expr_eval = eval_expr(arg_expr, fn_env.clone());
+                let rc = Rc::new(move |_, _| arg_expr_eval.clone());
+                clone_env.vars.borrow_mut().insert(arg_name.clone(), rc);
+            });
+            eval_expr(lambda_expr.clone(), clone_env)
+        }),
     })
 }
 fn eval_symbol(name: &String, args_list: &[ObjExpr], env: Env) -> ObjExpr {
