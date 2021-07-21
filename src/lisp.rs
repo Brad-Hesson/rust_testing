@@ -169,31 +169,39 @@ fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
             } else {
                 panic!("Got an empty list");
             };
-            let name = if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = first {
-                name
-            } else if let ObjExpr::Lambda(ObjLambda { func }) =
-                eval_expr(first.clone(), env.clone())
-            {
-                return func(
-                    ObjList {
-                        list: Vec::from(args_list),
-                    },
-                    env,
-                );
-            } else {
-                panic!(
+            match first {
+                ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) => {
+                    eprintln!("Got proc `{}` with args: {:?}", name, args_list);
+                    match name.as_str() {
+                        "begin" => eval_begin(args_list, env),
+                        "define" => eval_define(args_list, env),
+                        "if" => eval_if(args_list, env),
+                        "quote" => eval_quote(args_list),
+                        "lambda" => eval_lambda(args_list),
+                        _ => eval_symbol(name, args_list, env),
+                    }
+                }
+                ObjExpr::List(..) => {
+                    if let ObjExpr::Lambda(ObjLambda { func }) =
+                        eval_expr(first.clone(), env.clone())
+                    {
+                        func(
+                            ObjList {
+                                list: Vec::from(args_list),
+                            },
+                            env,
+                        )
+                    } else {
+                        panic!(
+                            "First element of a list must be a symbol or a lambda expression, got `{:?}`",
+                            first
+                        )
+                    }
+                }
+                _ => panic!(
                     "First element of a list must be a symbol or a lambda expression, got `{:?}`",
                     first
-                )
-            };
-            eprintln!("Got proc `{}` with args: {:?}", name, args_list);
-            match name.as_str() {
-                "begin" => eval_begin(args_list, env),
-                "define" => eval_define(args_list, env),
-                "if" => eval_if(args_list, env),
-                "quote" => eval_quote(args_list, env),
-                "lambda" => eval_lambda(args_list, env),
-                _ => eval_symbol(name, args_list, env),
+                ),
             }
         }
         expr => expr,
@@ -240,11 +248,11 @@ fn eval_if(args_list: &[ObjExpr], env: Env) -> ObjExpr {
         eval_expr(args_list[2].clone(), env.clone())
     }
 }
-fn eval_quote(args_list: &[ObjExpr], env: Env) -> ObjExpr {
+fn eval_quote(args_list: &[ObjExpr]) -> ObjExpr {
     assert_arity("quote", 1, args_list);
     args_list[0].clone()
 }
-fn eval_lambda(args_list: &[ObjExpr], env: Env) -> ObjExpr {
+fn eval_lambda(args_list: &[ObjExpr]) -> ObjExpr {
     assert_arity("lambda", 2, args_list);
     let arg_names: Vec<String> = if let ObjExpr::List(ObjList { list }) = args_list[0].clone() {
         list.iter()
