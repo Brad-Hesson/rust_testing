@@ -1,6 +1,6 @@
+use core::panic;
 use std::{
     collections::HashMap,
-    env::args,
     fmt::{Debug, Display},
     iter::Peekable,
     rc::Rc,
@@ -72,9 +72,16 @@ impl Debug for ObjList {
 }
 
 #[derive(Clone)]
+struct ObjLambda {
+    expr: Rc<ObjExpr>,
+    args: Vec<String>,
+}
+
+#[derive(Clone)]
 enum ObjExpr {
     Atom(ObjAtom),
     List(ObjList),
+    Lambda(ObjLambda),
 }
 impl From<f64> for ObjExpr {
     fn from(n: f64) -> Self {
@@ -86,6 +93,7 @@ impl Debug for ObjExpr {
         match self {
             ObjExpr::Atom(atom) => atom.fmt(f),
             ObjExpr::List(list) => list.fmt(f),
+            ObjExpr::Lambda(_) => f.write_str("lambda"),
         }
     }
 }
@@ -114,6 +122,7 @@ fn parse_into_expr<I: Iterator<Item = String>>(tokens: &mut Peekable<I>) -> Opti
     }
 }
 
+#[derive(Clone)]
 struct Env {
     vars: HashMap<String, Rc<dyn Fn(ObjList) -> ObjExpr>>,
 }
@@ -151,8 +160,21 @@ fn eval_expr(expr: ObjExpr, env: &mut Env) -> ObjExpr {
             };
             let name = if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = first {
                 name
+            } else if let ObjExpr::Lambda(ObjLambda { expr, args }) = eval_expr(first.clone(), env)
+            {
+                assert_arity("lambda", args.len(), args_list);
+                let mut loc_env = env.clone();
+                Iterator::zip(args.iter(), args_list).for_each(|(name, expr)| {
+                    let expr = eval_expr(expr.clone(), env);
+                    let rc = Rc::new(move |_| expr.clone());
+                    loc_env.vars.insert(name.clone(), rc);
+                });
+                return eval_expr(expr.as_ref().clone(), &mut loc_env);
             } else {
-                panic!("First element of a list must be a symbol")
+                panic!(
+                    "First element of a list must be a symbol or a lambda expression, got `{:?}`",
+                    first
+                )
             };
             eprintln!("Got proc `{}` with args: {:?}", name, args_list);
             match name.as_str() {
@@ -196,6 +218,27 @@ fn eval_expr(expr: ObjExpr, env: &mut Env) -> ObjExpr {
                 "quote" => {
                     assert_arity("quote", 1, args_list);
                     args_list[0].clone()
+                }
+                "lambda" => {
+                    assert_arity("lambda", 2, args_list);
+                    let args: Vec<String> = if let ObjExpr::List(ObjList { list }) =
+                        args_list[0].clone()
+                    {
+                        list.iter().map(|expr|{
+                            if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = expr{
+                                name.clone()
+                            }else{
+                                panic!("First argument of `lambda` must be a list of symbols, got a `{:?}`", expr)
+                            }
+                        }).collect()
+                    } else {
+                        panic!(
+                            "First argument of `lambda` must be a list, got {:?}",
+                            args_list[0]
+                        )
+                    };
+                    let expr = Rc::new(args_list[1].clone());
+                    ObjExpr::Lambda(ObjLambda { expr, args })
                 }
                 _ => {
                     let func = env
@@ -244,12 +287,35 @@ fn it_works() {
     let mut env = Env::new();
     let out = run_lisp("(begin (define r 10) (* pi (* r r)))", &mut env);
     eprintln!("{:#?}", out);
+    assert_eq!(format!("{:?}", out), "314.159")
 }
 
 #[test]
 fn if_test() {
     let mut env = Env::new();
+
     run_lisp("(define b 1)", &mut env);
     let out = run_lisp("(if b (* 2 5) 20)", &mut env);
     eprintln!("{:#?}", out);
+    assert_eq!(format!("{:?}", out), "10");
+
+    run_lisp("(define b 0)", &mut env);
+    let out = run_lisp("(if b (* 2 5) 20)", &mut env);
+    eprintln!("{:#?}", out);
+    assert_eq!(format!("{:?}", out), "20");
+}
+
+#[test]
+fn lambda_test() {
+    let mut env = Env::new();
+    let out = run_lisp("((lambda (r) (begin (define h 10) (* r h))) 2)", &mut env);
+    eprintln!("{:?}", out)
+}
+
+#[test]
+fn lambda_define_test() {
+    let mut env = Env::new();
+    run_lisp("(define fn (lambda (r) (begin (define h 10))))", &mut env);
+    let out = run_lisp("(fn 2 2)", &mut env);
+    eprintln!("{:?}", out)
 }
