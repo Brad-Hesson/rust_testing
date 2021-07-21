@@ -265,7 +265,9 @@ fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
                                 loc_env.vars.borrow_mut().insert(name.clone(), rc);
                             },
                         );
-                        eval_expr(expr.clone(), loc_env)
+                        
+                        let out = eval_expr(expr.clone(), loc_env);
+                        out
                     };
                     ObjExpr::Lambda(ObjLambda {
                         func: Rc::new(func),
@@ -342,16 +344,22 @@ fn if_test() {
 fn lambda_test() {
     let env = Env::new();
     let out = run_lisp("((lambda (r) (begin (define h 10) (* r h))) 2)", env);
-    eprintln!("{:?}", out)
+    eprintln!("{:?}", out);
+    assert_eq!(format!("{:?}", out), "20");
 }
 
 #[test]
 fn lambda_define_test() {
     let env = Env::new();
     run_lisp(
-        "(define fn (lambda (r) (begin (define h 10))))",
+        "(define square (lambda (r) (* r r)))",
         env.clone(),
     );
-    let out = run_lisp("(fn 2)", env.clone());
-    eprintln!("{:?}", out)
+    let out = run_lisp("(square 2)", env.clone());
+    eprintln!("{:?}", out);
+    assert_eq!(format!("{:?}", out), "4");
+
+    let out = run_lisp("(square 3)", env.clone());
+    eprintln!("{:?}", out);
+    assert_eq!(format!("{:?}", out), "9");
 }
