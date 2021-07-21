@@ -109,7 +109,7 @@ fn parse_into_expr<I: Iterator<Item = String>>(tokens: &mut Peekable<I>) -> Opti
                 list.push(expr);
             }
             assert_eq!(tokens.next(), Some(")".to_string()));
-            Some(ObjExpr::List(ObjList { list: list }))
+            Some(ObjExpr::List(ObjList { list }))
         }
         _ => {
             let tok = tokens.next()?;
@@ -122,16 +122,15 @@ fn parse_into_expr<I: Iterator<Item = String>>(tokens: &mut Peekable<I>) -> Opti
         }
     }
 }
-
+type LambdaFn = dyn Fn(ObjList, Env) -> ObjExpr;
 #[derive(Clone)]
 pub struct Env {
-    vars: Rc<RefCell<HashMap<String, Rc<dyn Fn(ObjList, Env) -> ObjExpr>>>>,
+    vars: Rc<RefCell<HashMap<String, Rc<LambdaFn>>>>,
 }
 
 impl Env {
     pub fn new() -> Self {
-        let vars_cell: RefCell<HashMap<String, Rc<dyn Fn(ObjList, Env) -> ObjExpr>>> =
-            RefCell::new(HashMap::new());
+        let vars_cell: RefCell<HashMap<String, Rc<LambdaFn>>> = RefCell::new(HashMap::new());
         let mut vars = vars_cell.borrow_mut();
         vars.insert(
             "*".to_string(),
@@ -142,7 +141,7 @@ impl Env {
                 _ => panic!("Wrong args for `*`, got `{:?}`", v),
             }),
         );
-        vars.insert("pi".to_string(), Rc::new(|_, _| ObjExpr::from(3.14159)));
+        vars.insert("pi".to_string(), Rc::new(|_, _| ObjExpr::from(std::f64::consts::PI)));
         drop(vars);
         Self {
             vars: Rc::new(vars_cell),
@@ -154,6 +153,11 @@ impl Env {
         }
     }
 }
+impl Default for Env {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
     match expr {
@@ -161,7 +165,7 @@ fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
             let borrow = env.vars.borrow();
             let var = borrow
                 .get(&name)
-                .expect(&format!("Variable `{}` does not exist", name));
+                .unwrap_or_else(|| panic!("Variable `{}` does not exist", name));
             var(ObjList { list: vec![] }, env.clone())
         }
         ObjExpr::List(ObjList { list }) => {
@@ -289,12 +293,12 @@ fn eval_lambda(args_list: &[ObjExpr]) -> ObjExpr {
         }),
     })
 }
-fn eval_symbol(name: &String, args_list: &[ObjExpr], env: Env) -> ObjExpr {
+fn eval_symbol(name: &str, args_list: &[ObjExpr], env: Env) -> ObjExpr {
     let func = env
         .vars
         .borrow()
         .get(name)
-        .expect(&format!("Proc `{}` does not exist", name))
+        .unwrap_or_else(|| panic!("Proc `{}` does not exist", name))
         .clone();
     let args = args_list
         .iter()
@@ -335,7 +339,7 @@ mod tests {
         let env = Env::new();
         let out = run_lisp("(begin (define r 10) (* pi (* r r)))", env);
         eprintln!("{:#?}", out);
-        assert_eq!(format!("{:?}", out), "314.159")
+        assert_eq!(format!("{:?}", out), "314.1592653589793")
     }
 
     #[test]
