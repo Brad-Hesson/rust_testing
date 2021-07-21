@@ -123,12 +123,12 @@ fn parse_into_expr<I: Iterator<Item = String>>(tokens: &mut Peekable<I>) -> Opti
 }
 
 #[derive(Clone)]
-struct Env {
+pub struct Env {
     vars: Rc<RefCell<HashMap<String, Rc<dyn Fn(ObjList, Env) -> ObjExpr>>>>,
 }
 
 impl Env {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let vars_cell: RefCell<HashMap<String, Rc<dyn Fn(ObjList, Env) -> ObjExpr>>> =
             RefCell::new(HashMap::new());
         let mut vars = vars_cell.borrow_mut();
@@ -188,104 +188,111 @@ fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
             };
             eprintln!("Got proc `{}` with args: {:?}", name, args_list);
             match name.as_str() {
-                "begin" => args_list
-                    .iter()
-                    .map(|expr| eval_expr(expr.clone(), env.clone()))
-                    .last()
-                    .expect("Got begin proc with no args"),
-                "define" => {
-                    assert_arity("define", 2, args_list);
-                    let name = if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) =
-                        args_list[0].clone()
-                    {
-                        name
-                    } else {
-                        panic!(
-                            "First argument of `define` must be a symbol, got `{:?}`",
-                            args_list[0]
-                        );
-                    };
-                    let expr = eval_expr(args_list[1].clone(), env.clone());
-                    if let ObjExpr::Lambda(ObjLambda { func }) = expr {
-                        env.vars.borrow_mut().insert(name.clone(), func);
-                    } else {
-                        let rc = Rc::new(move |_, _| expr.clone());
-                        env.vars.borrow_mut().insert(name.clone(), rc);
-                    }
-                    ObjExpr::List(ObjList { list: vec![] })
-                }
-                "if" => {
-                    assert_arity("if", 3, args_list);
-                    let cond = if let ObjExpr::Atom(ObjAtom::Number(ObjNumber { value })) =
-                        eval_expr(args_list[0].clone(), env.clone())
-                    {
-                        value != 0.0
-                    } else {
-                        panic!("Got invalid if condition: `{:?}`", args_list[0])
-                    };
-                    if cond {
-                        eval_expr(args_list[1].clone(), env.clone())
-                    } else {
-                        eval_expr(args_list[2].clone(), env.clone())
-                    }
-                }
-                "quote" => {
-                    assert_arity("quote", 1, args_list);
-                    args_list[0].clone()
-                }
-                "lambda" => {
-                    assert_arity("lambda", 2, args_list);
-                    let arg_names: Vec<String> = if let ObjExpr::List(ObjList { list }) =
-                        args_list[0].clone()
-                    {
-                        list.iter().map(|expr|{
-                            if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = expr{
-                                name.clone()
-                            }else{
-                                panic!("First argument of `lambda` must be a list of symbols, got a `{:?}`", expr)
-                            }
-                        }).collect()
-                    } else {
-                        panic!(
-                            "First argument of `lambda` must be a list, got {:?}",
-                            args_list[0]
-                        )
-                    };
-                    let expr = args_list[1].clone();
-                    let arity = arg_names.len();
-                    let func = move |fn_args_list: ObjList, fn_env: Env| {
-                        assert_arity("lambda", arity, &fn_args_list.list);
-                        let loc_env = fn_env.clone_deep();
-                        Iterator::zip(arg_names.iter(), fn_args_list.list).for_each(
-                            |(name, expr)| {
-                                let expr = eval_expr(expr.clone(), fn_env.clone());
-                                let rc = Rc::new(move |_, _| expr.clone());
-                                loc_env.vars.borrow_mut().insert(name.clone(), rc);
-                            },
-                        );
-                        eval_expr(expr.clone(), loc_env)
-                    };
-                    ObjExpr::Lambda(ObjLambda {
-                        func: Rc::new(func),
-                    })
-                }
-                _ => {
-                    let func = env
-                        .vars
-                        .borrow()
-                        .get(name)
-                        .expect(&format!("Proc `{}` does not exist", name))
-                        .clone();
-                    let args = args_list
-                        .iter()
-                        .map(|expr| eval_expr(expr.clone(), env.clone()))
-                        .collect();
-                    func(ObjList { list: args }, env)
-                }
+                "begin" => eval_begin(args_list, env),
+                "define" => eval_define(args_list, env),
+                "if" => eval_if(args_list, env),
+                "quote" => eval_quote(args_list, env),
+                "lambda" => eval_lambda(args_list, env),
+                _ => eval_symbol(name, args_list, env),
             }
         }
         expr => expr,
     }
+}
+fn eval_begin(args_list: &[ObjExpr], env: Env) -> ObjExpr {
+    args_list
+        .iter()
+        .map(|expr| eval_expr(expr.clone(), env.clone()))
+        .last()
+        .expect("Got begin proc with no args")
+}
+fn eval_define(args_list: &[ObjExpr], env: Env) -> ObjExpr {
+    assert_arity("define", 2, args_list);
+    let name = if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = args_list[0].clone() {
+        name
+    } else {
+        panic!(
+            "First argument of `define` must be a symbol, got `{:?}`",
+            args_list[0]
+        );
+    };
+    let expr = eval_expr(args_list[1].clone(), env.clone());
+    if let ObjExpr::Lambda(ObjLambda { func }) = expr {
+        env.vars.borrow_mut().insert(name.clone(), func);
+    } else {
+        let rc = Rc::new(move |_, _| expr.clone());
+        env.vars.borrow_mut().insert(name.clone(), rc);
+    }
+    ObjExpr::List(ObjList { list: vec![] })
+}
+fn eval_if(args_list: &[ObjExpr], env: Env) -> ObjExpr {
+    assert_arity("if", 3, args_list);
+    let cond = if let ObjExpr::Atom(ObjAtom::Number(ObjNumber { value })) =
+        eval_expr(args_list[0].clone(), env.clone())
+    {
+        value != 0.0
+    } else {
+        panic!("Got invalid if condition: `{:?}`", args_list[0])
+    };
+    if cond {
+        eval_expr(args_list[1].clone(), env.clone())
+    } else {
+        eval_expr(args_list[2].clone(), env.clone())
+    }
+}
+fn eval_quote(args_list: &[ObjExpr], env: Env) -> ObjExpr {
+    assert_arity("quote", 1, args_list);
+    args_list[0].clone()
+}
+fn eval_lambda(args_list: &[ObjExpr], env: Env) -> ObjExpr {
+    assert_arity("lambda", 2, args_list);
+    let arg_names: Vec<String> = if let ObjExpr::List(ObjList { list }) = args_list[0].clone() {
+        list.iter()
+            .map(|expr| {
+                if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = expr {
+                    name.clone()
+                } else {
+                    panic!(
+                        "First argument of `lambda` must be a list of symbols, got a `{:?}`",
+                        expr
+                    )
+                }
+            })
+            .collect()
+    } else {
+        panic!(
+            "First argument of `lambda` must be a list, got {:?}",
+            args_list[0]
+        )
+    };
+    let expr = args_list[1].clone();
+    let arity = arg_names.len();
+    let func = move |fn_args_list: ObjList, fn_env: Env| {
+        assert_arity("lambda", arity, &fn_args_list.list);
+        let loc_env = fn_env.clone_deep();
+        Iterator::zip(arg_names.iter(), fn_args_list.list).for_each(|(name, expr)| {
+            let expr = eval_expr(expr.clone(), fn_env.clone());
+            let rc = Rc::new(move |_, _| expr.clone());
+            loc_env.vars.borrow_mut().insert(name.clone(), rc);
+        });
+        eval_expr(expr.clone(), loc_env)
+    };
+    ObjExpr::Lambda(ObjLambda {
+        func: Rc::new(func),
+    })
+}
+fn eval_symbol(name: &String, args_list: &[ObjExpr], env: Env) -> ObjExpr {
+    let func = env
+        .vars
+        .borrow()
+        .get(name)
+        .expect(&format!("Proc `{}` does not exist", name))
+        .clone();
+    let args = args_list
+        .iter()
+        .map(|expr| eval_expr(expr.clone(), env.clone()))
+        .collect();
+    func(ObjList { list: args }, env)
 }
 
 fn assert_arity(fname: &str, arity: usize, args_list: &[ObjExpr]) {
