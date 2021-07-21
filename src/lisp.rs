@@ -330,6 +330,8 @@ pub fn run_lisp(source: &str, env: Env) -> ObjExpr {
 }
 #[cfg(test)]
 mod tests {
+    use std::fs::read_to_string;
+
     use super::*;
 
     #[test]
@@ -374,5 +376,15 @@ mod tests {
         let out = run_lisp("(square 3)", env.clone());
         eprintln!("{:?}", out);
         assert_eq!(format!("{:?}", out), "9");
+    }
+
+    #[test]
+    fn file_test() {
+        let source = read_to_string("src/test.rkt").unwrap();
+        let env = Env::new();
+        let out = run_lisp(&source, env);
+        eprintln!("{:?}", out)
+
+
     }
 }
