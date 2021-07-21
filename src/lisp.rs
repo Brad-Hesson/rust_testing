@@ -207,8 +207,12 @@ fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
                         );
                     };
                     let expr = eval_expr(args_list[1].clone(), env.clone());
-                    let rc = Rc::new(move |_, _| expr.clone());
-                    env.vars.borrow_mut().insert(name.clone(), rc);
+                    if let ObjExpr::Lambda(ObjLambda { func, args: _ }) = expr {
+                        env.vars.borrow_mut().insert(name.clone(), func);
+                    } else {
+                        let rc = Rc::new(move |_, _| expr.clone());
+                        env.vars.borrow_mut().insert(name.clone(), rc);
+                    }
                     ObjExpr::List(ObjList { list: vec![] })
                 }
                 "if" => {
@@ -232,7 +236,7 @@ fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
                 }
                 "lambda" => {
                     assert_arity("lambda", 2, args_list);
-                    let args: Vec<String> = if let ObjExpr::List(ObjList { list }) =
+                    let arg_names: Vec<String> = if let ObjExpr::List(ObjList { list }) =
                         args_list[0].clone()
                     {
                         list.iter().map(|expr|{
@@ -248,15 +252,15 @@ fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
                             args_list[0]
                         )
                     };
-                    let args_clone = args.clone();
+                    let arg_names_clone = arg_names.clone();
                     let expr = args_list[1].clone();
-                    let arity = args.len();
-                    let func = move |args_list_loc: ObjList, env: Env| {
-                        assert_arity("lambda", arity, &args_list_loc.list);
-                        let loc_env = env.clone_deep();
-                        Iterator::zip(args_clone.iter(), args_list_loc.list).for_each(
+                    let arity = arg_names.len();
+                    let func = move |fn_args_list: ObjList, fn_env: Env| {
+                        assert_arity("lambda", arity, &fn_args_list.list);
+                        let loc_env = fn_env.clone_deep();
+                        Iterator::zip(arg_names_clone.iter(), fn_args_list.list).for_each(
                             |(name, expr)| {
-                                let expr = eval_expr(expr.clone(), env.clone());
+                                let expr = eval_expr(expr.clone(), fn_env.clone());
                                 let rc = Rc::new(move |_, _| expr.clone());
                                 loc_env.vars.borrow_mut().insert(name.clone(), rc);
                             },
@@ -265,7 +269,7 @@ fn eval_expr(expr: ObjExpr, env: Env) -> ObjExpr {
                     };
                     ObjExpr::Lambda(ObjLambda {
                         func: Rc::new(func),
-                        args: args.clone(),
+                        args: arg_names.clone(),
                     })
                 }
                 _ => {
@@ -348,6 +352,6 @@ fn lambda_define_test() {
         "(define fn (lambda (r) (begin (define h 10))))",
         env.clone(),
     );
-    let out = run_lisp("(fn 2 2)", env.clone());
+    let out = run_lisp("(fn 2)", env.clone());
     eprintln!("{:?}", out)
 }
