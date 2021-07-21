@@ -1,5 +1,12 @@
 use core::panic;
-use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::{Debug, Display}, iter::Peekable, rc::Rc};
+use std::{
+    borrow::Cow,
+    cell::RefCell,
+    collections::HashMap,
+    fmt::{Debug, Display},
+    iter::Peekable,
+    rc::Rc,
+};
 
 use regex::Regex;
 
@@ -319,47 +326,51 @@ fn run_lisp(source: &str, env: Env) -> ObjExpr {
     let expr = parse_lisp(source);
     eval_expr(expr, env)
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn it_works() {
-    let env = Env::new();
-    let out = run_lisp("(begin (define r 10) (* pi (* r r)))", env);
-    eprintln!("{:#?}", out);
-    assert_eq!(format!("{:?}", out), "314.159")
-}
+    #[test]
+    fn it_works() {
+        let env = Env::new();
+        let out = run_lisp("(begin (define r 10) (* pi (* r r)))", env);
+        eprintln!("{:#?}", out);
+        assert_eq!(format!("{:?}", out), "314.159")
+    }
 
-#[test]
-fn if_test() {
-    let env = Env::new();
+    #[test]
+    fn if_test() {
+        let env = Env::new();
 
-    run_lisp("(define b 1)", env.clone());
-    let out = run_lisp("(if b (* 2 5) 20)", env.clone());
-    eprintln!("{:#?}", out);
-    assert_eq!(format!("{:?}", out), "10");
+        run_lisp("(define b 1)", env.clone());
+        let out = run_lisp("(if b (* 2 5) 20)", env.clone());
+        eprintln!("{:#?}", out);
+        assert_eq!(format!("{:?}", out), "10");
 
-    run_lisp("(define b 0)", env.clone());
-    let out = run_lisp("(if b (* 2 5) 20)", env.clone());
-    eprintln!("{:#?}", out);
-    assert_eq!(format!("{:?}", out), "20");
-}
+        run_lisp("(define b 0)", env.clone());
+        let out = run_lisp("(if b (* 2 5) 20)", env.clone());
+        eprintln!("{:#?}", out);
+        assert_eq!(format!("{:?}", out), "20");
+    }
 
-#[test]
-fn lambda_test() {
-    let env = Env::new();
-    let out = run_lisp("((lambda (r) (begin (define h 10) (* r h))) 2)", env);
-    eprintln!("{:?}", out);
-    assert_eq!(format!("{:?}", out), "20");
-}
+    #[test]
+    fn lambda_test() {
+        let env = Env::new();
+        let out = run_lisp("((lambda (r) (begin (define h 10) (* r h))) 2)", env);
+        eprintln!("{:?}", out);
+        assert_eq!(format!("{:?}", out), "20");
+    }
 
-#[test]
-fn lambda_define_test() {
-    let env = Env::new();
-    run_lisp("(define square (lambda (r) (* r r)))", env.clone());
-    let out = run_lisp("(square 2)", env.clone());
-    eprintln!("{:?}", out);
-    assert_eq!(format!("{:?}", out), "4");
+    #[test]
+    fn lambda_define_test() {
+        let env = Env::new();
+        run_lisp("(define square (lambda (r) (* r r)))", env.clone());
+        let out = run_lisp("(square 2)", env.clone());
+        eprintln!("{:?}", out);
+        assert_eq!(format!("{:?}", out), "4");
 
-    let out = run_lisp("(square 3)", env.clone());
-    eprintln!("{:?}", out);
-    assert_eq!(format!("{:?}", out), "9");
+        let out = run_lisp("(square 3)", env.clone());
+        eprintln!("{:?}", out);
+        assert_eq!(format!("{:?}", out), "9");
+    }
 }
