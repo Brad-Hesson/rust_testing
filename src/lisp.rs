@@ -122,9 +122,10 @@ fn parse_into_expr<I: Iterator<Item = String>>(tokens: &mut Peekable<I>) -> Opti
     }
 }
 type LambdaFn = dyn Fn(Vec<ObjExpr>, Env) -> Result<ObjExpr, EvalErr>;
+type Stack = Vec<RefCell<HashMap<String, Rc<LambdaFn>>>>;
 #[derive(Clone)]
 pub struct Env {
-    vars: Rc<RefCell<Vec<RefCell<HashMap<String, Rc<LambdaFn>>>>>>,
+    vars: Rc<RefCell<Stack>>,
 }
 
 macro_rules! arg_as {
@@ -350,7 +351,7 @@ fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
                 return Err("Got an empty list".to_string());
             };
             if let Ok(name) = arg_as!(Symbol, first, "", env) {
-                let func = env.get(name.to_string());
+                let func = env.get(name);
                 return func(args_list.to_vec(), env);
             }
             if let Ok(func) = arg_as!(Lambda, first, "", env.clone()) {
