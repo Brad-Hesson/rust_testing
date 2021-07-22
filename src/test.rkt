@@ -1,5 +1,8 @@
 ( begin
-    (define test 1)
-    (define result (* 1 test))
-    result
+    (define fib (lambda (n) (
+        if (< n 3) 
+            1 
+            (+ (fib (- n 1)) (fib (- n 2)))
+    )))
+    (fib 18)
 )

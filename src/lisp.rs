@@ -128,36 +128,59 @@ pub struct Env {
 }
 
 macro_rules! arg_as {
-    (Number, $expression:expr, $env:expr) => {{
-        if let ObjExpr::Atom(ObjAtom::Number(ObjNumber { value })) =
-            eval_expr($expression.clone(), $env)?
+    (Number, $expr:expr, $fname:expr, $env:expr) => {{
+        if let ObjExpr::Atom(ObjAtom::Number(ObjNumber { value })) = eval_expr($expr.clone(), $env)?
         {
             Ok(value)
         } else {
-            Err("".to_string())
+            Err(format!(
+                "`{}` expected a number but got `{:?}`",
+                $fname, $expr
+            ))
         }
     }};
-    (Symbol, $expression:expr, $env:expr) => {{
-        if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = $expression.clone() {
+    (Symbol, $expr:expr, $fname:expr, $env:expr) => {{
+        if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = $expr.clone() {
             Ok(name)
         } else {
-            Err("".to_string())
+            Err(format!(
+                "`{}` expected a symbol but got `{:?}`",
+                $fname, $expr
+            ))
         }
     }};
-    (Lambda, $expression:expr, $env:expr) => {{
-        if let ObjExpr::Lambda(ObjLambda { func }) = eval_expr($expression.clone(), $env)? {
+    (Lambda, $expr:expr, $fname:expr, $env:expr) => {{
+        if let ObjExpr::Lambda(ObjLambda { func }) = eval_expr($expr.clone(), $env)? {
             Ok(func)
         } else {
-            Err("".to_string())
+            Err(format!(
+                "`{}` expected a lambda but got `{:?}`",
+                $fname, $expr
+            ))
         }
     }};
-    (List, $expression:expr, $env:expr) => {{
-        if let ObjExpr::List(ObjList { list }) = $expression.clone() {
+    (List, $expr:expr, $fname:expr, $env:expr) => {{
+        if let ObjExpr::List(ObjList { list }) = $expr.clone() {
             Ok(list)
         } else {
-            Err("".to_string())
+            Err(format!(
+                "`{}` expected a list but got `{:?}`",
+                $fname, $expr
+            ))
         }
     }};
+}
+
+macro_rules! assert_arity {
+    ($fname:expr, $arity:expr, $args_list:expr) => {
+        assert!(
+            $args_list.len() == $arity,
+            "`{}` takes {} expression(s) as an argument, got `{:?}`",
+            $fname,
+            $arity,
+            $args_list
+        );
+    };
 }
 
 type EvalErr = String;
@@ -178,9 +201,9 @@ impl Env {
         vars.insert(
             "define".to_string(),
             Rc::new(|args_list, env| {
-                assert_arity("define", 2, &args_list);
-                let name = arg_as!(Symbol, args_list[0], env)?;
-                if let Ok(func) = arg_as!(Lambda, args_list[1], env.clone()) {
+                assert_arity!("define", 2, &args_list);
+                let name = arg_as!(Symbol, args_list[0], "define", env)?;
+                if let Ok(func) = arg_as!(Lambda, args_list[1], "define", env.clone()) {
                     env.insert(name, func);
                 } else {
                     let expr = eval_expr(args_list[1].clone(), env.clone())?;
@@ -193,8 +216,8 @@ impl Env {
         vars.insert(
             "if".to_string(),
             Rc::new(|args_list, env| {
-                assert_arity("if", 3, &args_list);
-                let cond = arg_as!(Number, args_list[0], env.clone())?;
+                assert_arity!("if", 3, &args_list);
+                let cond = arg_as!(Number, args_list[0], "if", env.clone())?;
                 if cond != 0f64 {
                     eval_expr(args_list[1].clone(), env)
                 } else {
@@ -205,23 +228,23 @@ impl Env {
         vars.insert(
             "quote".to_string(),
             Rc::new(|args_list, _| {
-                assert_arity("quote", 1, &args_list);
+                assert_arity!("quote", 1, &args_list);
                 Ok(args_list[0].clone())
             }),
         );
         vars.insert(
             "lambda".to_string(),
             Rc::new(|args_list, _| {
-                assert_arity("lambda", 2, &args_list);
-                let arg_names = arg_as!(List, args_list[0], env)?
+                assert_arity!("lambda", 2, &args_list);
+                let arg_names = arg_as!(List, args_list[0], "lambda", env)?
                     .iter()
-                    .map(|expr| arg_as!(Symbol, expr, env))
+                    .map(|expr| arg_as!(Symbol, expr, "lambda", env))
                     .collect::<Result<Vec<String>, EvalErr>>()?;
                 let arity = arg_names.len();
                 let lambda_expr = args_list[1].clone();
                 Ok(ObjExpr::Lambda(ObjLambda {
                     func: Rc::new(move |fn_args_list, fn_env| {
-                        assert_arity("lambda", arity, &fn_args_list);
+                        assert_arity!("lambda", arity, &fn_args_list);
                         fn_env.push_new_stack();
                         Iterator::zip(arg_names.iter(), fn_args_list).for_each(
                             |(arg_name, arg_expr)| {
@@ -240,10 +263,37 @@ impl Env {
         vars.insert(
             "*".to_string(),
             Rc::new(|args_list, env| {
-                assert_arity("*", 2, &args_list);
-                let l = arg_as!(Number, args_list[0], env.clone())?;
-                let r = arg_as!(Number, args_list[1], env)?;
+                assert_arity!("*", 2, &args_list);
+                let l = arg_as!(Number, args_list[0], "*", env.clone())?;
+                let r = arg_as!(Number, args_list[1], "*", env)?;
                 Ok(ObjExpr::from(l * r))
+            }),
+        );
+        vars.insert(
+            "+".to_string(),
+            Rc::new(|args_list, env| {
+                assert_arity!("+", 2, &args_list);
+                let l = arg_as!(Number, args_list[0], "+", env.clone())?;
+                let r = arg_as!(Number, args_list[1], "+", env)?;
+                Ok(ObjExpr::from(l + r))
+            }),
+        );
+        vars.insert(
+            "-".to_string(),
+            Rc::new(|args_list, env| {
+                assert_arity!("-", 2, &args_list);
+                let l = arg_as!(Number, args_list[0], "-", env.clone())?;
+                let r = arg_as!(Number, args_list[1], "-", env)?;
+                Ok(ObjExpr::from(l - r))
+            }),
+        );
+        vars.insert(
+            "<".to_string(),
+            Rc::new(|args_list, env| {
+                assert_arity!("<", 2, &args_list);
+                let l = arg_as!(Number, args_list[0], "<", env.clone())?;
+                let r = arg_as!(Number, args_list[1], "<", env)?;
+                Ok(ObjExpr::from((l < r) as usize as f64))
             }),
         );
         vars.insert(
@@ -299,12 +349,11 @@ fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
             } else {
                 return Err("Got an empty list".to_string());
             };
-            if let Ok(name) = arg_as!(Symbol, first, env) {
-                eprintln!("Got proc `{}` with args: {:?}", name, args_list);
+            if let Ok(name) = arg_as!(Symbol, first, "", env) {
                 let func = env.get(name.to_string());
                 return func(args_list.to_vec(), env);
             }
-            if let Ok(func) = arg_as!(Lambda, first, env.clone()) {
+            if let Ok(func) = arg_as!(Lambda, first, "", env.clone()) {
                 return func(Vec::from(args_list), env);
             }
             Err(format!(
@@ -314,16 +363,6 @@ fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
         }
         expr => Ok(expr),
     }
-}
-
-fn assert_arity(fname: &str, arity: usize, args_list: &[ObjExpr]) {
-    assert!(
-        args_list.len() == arity,
-        "`{}` takes {} expression(s) as an argument, got `{:?}`",
-        fname,
-        arity,
-        args_list
-    );
 }
 
 pub fn parse_lisp(source: &str) -> ObjExpr {
@@ -393,7 +432,8 @@ mod tests {
     fn file_test() {
         let source = read_to_string("src/test.rkt").unwrap();
         let env = Env::new();
-        let out = run_lisp(&source, env);
-        eprintln!("{:?}", out)
+        let out = run_lisp(&source, env).unwrap();
+        eprintln!("{:?}", out);
+        assert_eq!(format!("{:?}", out), "2584");
     }
 }
