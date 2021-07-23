@@ -11,16 +11,25 @@ use regex::Regex;
 
 struct Tokenizer {
     source: String,
-    patterns: Regex,
+    patterns: Vec<Regex>,
 }
 
 impl Iterator for Tokenizer {
     type Item = String;
     fn next(&mut self) -> Option<String> {
-        let mat = self.patterns.find(&self.source)?;
-        let found = self.source[mat.range()].to_string();
-        self.source = self.source[mat.end()..].to_string();
-        Some(found)
+        for pat in &self.patterns {
+            if let Some(capture) = pat.captures(&self.source) {
+                let (front, back) = self.source.split_at(capture.get(0)?.end());
+                let token = capture.get(1).map(|mat| front[mat.range()].to_string());
+                self.source = back.to_string();
+                if let Some(token) = token {
+                    return Some(token);
+                } else {
+                    return self.next();
+                }
+            }
+        }
+        None
     }
 }
 
@@ -193,10 +202,10 @@ impl Env {
             "begin".to_string(),
             Rc::new(|args_list, env| {
                 args_list
-                .iter()
-                .map(|expr| eval_expr(expr.clone(), env.clone()))
-                .last()
-                .expect("Got begin proc with no args")
+                    .iter()
+                    .map(|expr| eval_expr(expr.clone(), env.clone()))
+                    .last()
+                    .expect("Got begin proc with no args")
             }),
         );
         vars.insert(
@@ -403,7 +412,12 @@ fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
 pub fn parse_lisp(source: &str) -> ObjExpr {
     let mut tokenizer = Tokenizer {
         source: source.to_string(),
-        patterns: Regex::new(r"\(|\)|[^\s()]+").unwrap(),
+        patterns: vec![
+            Regex::new(r"(?m)\A\s*;.*$").unwrap(),
+            Regex::new(r"(?m)\A\s*([^\s()]+)").unwrap(),
+            Regex::new(r"(?m)\A\s*(\()").unwrap(),
+            Regex::new(r"(?m)\A\s*(\))").unwrap(),
+        ],
     }
     .peekable();
     parse_into_expr(&mut tokenizer).unwrap()
