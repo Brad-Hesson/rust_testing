@@ -4,5 +4,8 @@
             1 
             (+ (fib (- n 1)) (fib (- n 2)))
     )))
-    (fib 18)
+    (define zip (lambda (l1 l2) (
+        map list l1 l2
+    )))
+    (map list (1 2 3) (1 2 3))
 )
