@@ -262,6 +262,40 @@ impl Env {
             }),
         );
         vars.insert(
+            "list".to_string(),
+            Rc::new(|args_list, _| Ok(ObjExpr::List(ObjList { list: args_list }))),
+        );
+        vars.insert(
+            "map".to_string(),
+            Rc::new(|args_list, env| {
+                eprintln!("Map called with args_list: {:?}", args_list);
+                let func = if let Ok(name) = arg_as!(Symbol, args_list[0], "", env) {
+                    env.get(name)
+                } else if let Ok(func) = arg_as!(Lambda, args_list[0], "map", env.clone()) {
+                    func
+                } else {
+                    return Err("First argument of map must be a function".to_string());
+                };
+                let mut index = 0;
+                let mut results = Vec::<ObjExpr>::new();
+                while let Ok(args) = args_list[1..]
+                    .iter()
+                    .map(|expr| {
+                        Ok(arg_as!(List, expr, "map", env.clone())?
+                            .get(index)
+                            .ok_or("")?
+                            .clone())
+                    })
+                    .collect::<Result<Vec<ObjExpr>, EvalErr>>()
+                {
+                    index += 1;
+                    eprintln!("Map args were: {:?}", args);
+                    results.push(func(args, env.clone())?)
+                }
+                Ok(ObjExpr::List(ObjList { list: results }))
+            }),
+        );
+        vars.insert(
             "*".to_string(),
             Rc::new(|args_list, env| {
                 assert_arity!("*", 2, &args_list);
