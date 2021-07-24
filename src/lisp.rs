@@ -190,7 +190,7 @@ type LambdaFn = dyn Fn(Vec<ObjExpr>, Env) -> Result<ObjExpr, EvalErr>;
 
 struct StackFrame {
     vars: RefCell<HashMap<String, ObjExpr>>,
-    procs: RefCell<HashMap<String, ObjLambda>>,
+    procs: RefCell<HashMap<String, ObjExpr>>,
 }
 impl StackFrame {
     fn new() -> Self {
@@ -257,9 +257,13 @@ impl Env {
                 assert_arity!("lambda", 2, &args_list);
                 let arg_names = arg_as_list!(args_list[0].clone(), "First argument of `lambda`")?;
                 let expr_to_run = args_list[1].clone();
-                let ObjLambda { func: define } = env
-                    .get_proc("define".to_string())
-                    .expect("`define` should always be in the environment");
+                let define = if let Some(ObjExpr::Lambda(ObjLambda { func })) =
+                    env.get_proc("define".to_string())
+                {
+                    Ok(func)
+                } else {
+                    Err("`define` should always be in the environment")
+                }?;
                 Ok(ObjExpr::Lambda(ObjLambda {
                     func: Rc::new(move |fn_args_list, fn_env: Env| {
                         assert_arity!("lambda function", arg_names.len(), &fn_args_list);
@@ -284,7 +288,7 @@ impl Env {
             "map".to_string(),
             Rc::new(|args_list, env| {
                 arg_as_lambda!(
-                    eval_expr(dealias_var(args_list[0].clone(), env.clone()), env.clone())?,
+                    eval_expr(dealias(args_list[0].clone(), env.clone()), env.clone())?,
                     "First argument of `map`"
                 )?;
                 let expr_to_run = args_list[0].clone();
@@ -293,7 +297,7 @@ impl Env {
                     .enumerate()
                     .map(|(i, expr)| {
                         arg_as_list!(
-                            dealias_var(expr.clone(), env.clone()),
+                            dealias(expr.clone(), env.clone()),
                             format!("Argument {} of `map`", i)
                         )
                     })
@@ -366,7 +370,7 @@ impl Env {
         }
         None
     }
-    fn get_proc(&self, name: String) -> Option<ObjLambda> {
+    fn get_proc(&self, name: String) -> Option<ObjExpr> {
         let borrow = self.0.as_ref().borrow();
         let mut iter = borrow.iter();
         while let Some(sf) = iter.next_back() {
@@ -399,7 +403,9 @@ impl Env {
     }
     fn insert_proc(&self, name: String, func: Rc<LambdaFn>) {
         if let Some(a) = self.0.as_ref().borrow().as_slice().last() {
-            a.procs.borrow_mut().insert(name, ObjLambda { func });
+            a.procs
+                .borrow_mut()
+                .insert(name, ObjExpr::Lambda(ObjLambda { func }));
         } else {
             panic!("No global scope in provided environment");
         }
@@ -412,7 +418,7 @@ impl Default for Env {
 }
 
 fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
-    let expr = dealias_var(expr, env.clone());
+    let expr = dealias(expr, env.clone());
     match expr {
         ObjExpr::List(ObjList { list }) => {
             //eprintln!("Evaluating list: {:?}", list);
@@ -431,14 +437,13 @@ fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
     }
 }
 
-fn dealias_var(expr: ObjExpr, env: Env) -> ObjExpr {
+fn dealias(expr: ObjExpr, env: Env) -> ObjExpr {
     match expr {
         ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) if env.contains_var(name.clone()) => env
             .get_var(name)
             .expect("Unreachable: Already checked that the key exists"),
         ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) if env.contains_proc(name.clone()) => {
             env.get_proc(name)
-                .map(ObjExpr::Lambda)
                 .expect("Unreachable: Already checked that the key exists")
         }
         expr => expr,
