@@ -226,7 +226,6 @@ impl Env {
                     ObjExpr::Lambda(ObjLambda { func }) => env.insert_proc(name.clone(), func),
                     expr => env.insert_var(name.clone(), expr),
                 }
-                eprintln!("Defined `{}`", name);
                 Ok(ObjExpr::List(ObjList { list: vec![] }))
             }),
         );
@@ -284,10 +283,10 @@ impl Env {
         env.insert_proc(
             "map".to_string(),
             Rc::new(|args_list, env| {
-                // arg_as_lambda!(
-                //     eval_expr(dealias_var(args_list[0].clone(), env.clone()), env.clone())?,
-                //     "First argument of `map`"
-                // )?;
+                arg_as_lambda!(
+                    eval_expr(dealias_var(args_list[0].clone(), env.clone()), env.clone())?,
+                    "First argument of `map`"
+                )?;
                 let expr_to_run = args_list[0].clone();
                 let args_vec = args_list[1..]
                     .iter()
@@ -357,11 +356,9 @@ impl Env {
     }
     fn push_new_stack(&self) {
         self.0.as_ref().borrow_mut().push(StackFrame::new());
-        eprintln!("Pushing new stack")
     }
     fn pop_old_stack(&self) {
         self.0.as_ref().borrow_mut().pop();
-        eprintln!("Popping stack")
     }
     fn get_var(&self, name: String) -> Option<ObjExpr> {
         let borrow = self.0.as_ref().borrow();
@@ -422,29 +419,16 @@ fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
     let expr = dealias_var(expr, env.clone());
     match expr {
         ObjExpr::List(ObjList { list }) => {
-            eprintln!("Evaluating list: {:?}", list);
+            //eprintln!("Evaluating list: {:?}", list);
             let (first_expr, args_list) = if let Some((f, a)) = list.split_first() {
                 (f, a)
             } else {
                 return Err("Got an empty list".to_string());
             };
-            let func = match eval_expr(first_expr.clone(), env.clone())? {
-                ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name }))
-                    if env.contains_proc(name.clone()) =>
-                {
-                    let ObjLambda { func } = env
-                        .get_proc(name)
-                        .expect("Unreachable: Already checked that the proc exists.");
-                    func
-                }
-                ObjExpr::Lambda(ObjLambda { func }) => func,
-                _ => {
-                    return Err(format!(
-                    "First element of a list must be a symbol or a lambda expression, got `{:?}`",
-                    first_expr
-                ))
-                }
-            };
+            let func = arg_as_lambda!(
+                eval_expr(first_expr.clone(), env.clone())?,
+                "First element of a list"
+            )?;
             func(args_list.to_vec(), env)
         }
         expr => Ok(expr),
@@ -456,6 +440,11 @@ fn dealias_var(expr: ObjExpr, env: Env) -> ObjExpr {
         ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) if env.contains_var(name.clone()) => env
             .get_var(name)
             .expect("Unreachable: Already checked that the key exists"),
+        ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) if env.contains_proc(name.clone()) => {
+            env.get_proc(name)
+                .map(|l| ObjExpr::Lambda(l))
+                .expect("Unreachable: Already checked that the key exists")
+        }
         expr => expr,
     }
 }
