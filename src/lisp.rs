@@ -223,8 +223,8 @@ impl Env {
                 let name = arg_as_symbol!(args_list[0].clone(), "First argument of `define`")?;
                 let definable = eval_expr(args_list[1].clone(), env.clone())?;
                 match definable {
-                    ObjExpr::Lambda(ObjLambda { func }) => env.insert_proc(name.clone(), func),
-                    expr => env.insert_var(name.clone(), expr),
+                    ObjExpr::Lambda(ObjLambda { func }) => env.insert_proc(name, func),
+                    expr => env.insert_var(name, expr),
                 }
                 Ok(ObjExpr::List(ObjList { list: vec![] }))
             }),
@@ -301,11 +301,7 @@ impl Env {
                 let mut index = 0;
                 let mut results = Vec::<ObjExpr>::new();
                 while let Some(args) = iter::once(Some(expr_to_run.clone()))
-                    .chain(
-                        args_vec
-                            .iter()
-                            .map(|vec| vec.get(index).map(|expr| expr.clone())),
-                    )
+                    .chain(args_vec.iter().map(|vec| vec.get(index).cloned()))
                     .collect::<Option<Vec<ObjExpr>>>()
                 {
                     index += 1;
@@ -442,7 +438,7 @@ fn dealias_var(expr: ObjExpr, env: Env) -> ObjExpr {
             .expect("Unreachable: Already checked that the key exists"),
         ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) if env.contains_proc(name.clone()) => {
             env.get_proc(name)
-                .map(|l| ObjExpr::Lambda(l))
+                .map(ObjExpr::Lambda)
                 .expect("Unreachable: Already checked that the key exists")
         }
         expr => expr,
