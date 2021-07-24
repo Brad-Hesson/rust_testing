@@ -190,13 +190,11 @@ type LambdaFn = dyn Fn(Vec<ObjExpr>, Env) -> Result<ObjExpr, EvalErr>;
 
 struct StackFrame {
     vars: RefCell<HashMap<String, ObjExpr>>,
-    procs: RefCell<HashMap<String, ObjExpr>>,
 }
 impl StackFrame {
     fn new() -> Self {
         Self {
             vars: RefCell::new(HashMap::new()),
-            procs: RefCell::new(HashMap::new()),
         }
     }
 }
@@ -258,7 +256,7 @@ impl Env {
                 let arg_names = arg_as_list!(args_list[0].clone(), "First argument of `lambda`")?;
                 let expr_to_run = args_list[1].clone();
                 let define = if let Some(ObjExpr::Lambda(ObjLambda { func })) =
-                    env.get_proc("define".to_string())
+                    env.get("define".to_string())
                 {
                     Ok(func)
                 } else {
@@ -360,7 +358,7 @@ impl Env {
     fn pop_old_stack(&self) {
         self.0.as_ref().borrow_mut().pop();
     }
-    fn get_var(&self, name: String) -> Option<ObjExpr> {
+    fn get(&self, name: String) -> Option<ObjExpr> {
         let borrow = self.0.as_ref().borrow();
         let mut iter = borrow.iter();
         while let Some(sf) = iter.next_back() {
@@ -370,29 +368,12 @@ impl Env {
         }
         None
     }
-    fn get_proc(&self, name: String) -> Option<ObjExpr> {
-        let borrow = self.0.as_ref().borrow();
-        let mut iter = borrow.iter();
-        while let Some(sf) = iter.next_back() {
-            if let Some(func) = sf.procs.borrow().get(&name) {
-                return Some(func.clone());
-            }
-        }
-        None
-    }
-    fn contains_var(&self, name: String) -> bool {
+    fn contains_key(&self, name: String) -> bool {
         self.0
             .as_ref()
             .borrow()
             .iter()
             .any(|sf| sf.vars.borrow().contains_key(&name))
-    }
-    fn contains_proc(&self, name: String) -> bool {
-        self.0
-            .as_ref()
-            .borrow()
-            .iter()
-            .any(|sf| sf.procs.borrow().contains_key(&name))
     }
     fn insert_var(&self, name: String, expr: ObjExpr) {
         if let Some(a) = self.0.as_ref().borrow().as_slice().last() {
@@ -403,7 +384,7 @@ impl Env {
     }
     fn insert_proc(&self, name: String, func: Rc<LambdaFn>) {
         if let Some(a) = self.0.as_ref().borrow().as_slice().last() {
-            a.procs
+            a.vars
                 .borrow_mut()
                 .insert(name, ObjExpr::Lambda(ObjLambda { func }));
         } else {
@@ -439,13 +420,9 @@ fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
 
 fn dealias(expr: ObjExpr, env: Env) -> ObjExpr {
     match expr {
-        ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) if env.contains_var(name.clone()) => env
-            .get_var(name)
+        ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) if env.contains_key(name.clone()) => env
+            .get(name)
             .expect("Unreachable: Already checked that the key exists"),
-        ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) if env.contains_proc(name.clone()) => {
-            env.get_proc(name)
-                .expect("Unreachable: Already checked that the key exists")
-        }
         expr => expr,
     }
 }
