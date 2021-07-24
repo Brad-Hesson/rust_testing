@@ -136,7 +136,7 @@ fn parse_into_expr<I: Iterator<Item = String>>(tokens: &mut Peekable<I>) -> Opti
     }
 }
 
-macro_rules! arg_as_number {
+macro_rules! expr_as_number {
     ($expr:expr, $fname:expr) => {{
         if let ObjExpr::Atom(ObjAtom::Number(ObjNumber { value })) = $expr {
             Ok(value)
@@ -145,7 +145,7 @@ macro_rules! arg_as_number {
         }
     }};
 }
-macro_rules! arg_as_symbol {
+macro_rules! expr_as_symbol {
     ($expr:expr, $fname:expr) => {{
         if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = $expr {
             Ok(name)
@@ -154,7 +154,7 @@ macro_rules! arg_as_symbol {
         }
     }};
 }
-macro_rules! arg_as_lambda {
+macro_rules! expr_as_lambda {
     ($expr:expr, $fname:expr) => {{
         if let ObjExpr::Lambda(ObjLambda { func }) = $expr {
             Ok(func)
@@ -163,7 +163,7 @@ macro_rules! arg_as_lambda {
         }
     }};
 }
-macro_rules! arg_as_list {
+macro_rules! expr_as_list {
     ($expr:expr, $fname:expr) => {{
         if let ObjExpr::List(ObjList { list }) = $expr {
             Ok(list)
@@ -218,7 +218,7 @@ impl Env {
             "define".to_string(),
             Rc::new(|args_list, env| {
                 assert_arity!("define", 2, &args_list);
-                let name = arg_as_symbol!(args_list[0].clone(), "First argument of `define`")?;
+                let name = expr_as_symbol!(args_list[0].clone(), "First argument of `define`")?;
                 let definable = eval_expr(args_list[1].clone(), env.clone())?;
                 match definable {
                     ObjExpr::Lambda(ObjLambda { func }) => env.insert_proc(name, func),
@@ -231,7 +231,7 @@ impl Env {
             "if".to_string(),
             Rc::new(|args_list, env| {
                 assert_arity!("if", 3, &args_list);
-                let cond = arg_as_number!(
+                let cond = expr_as_number!(
                     eval_expr(args_list[0].clone(), env.clone())?,
                     "First argument of 'if'"
                 )?;
@@ -253,7 +253,7 @@ impl Env {
             "lambda".to_string(),
             Rc::new(|args_list, env| {
                 assert_arity!("lambda", 2, &args_list);
-                let arg_names = arg_as_list!(args_list[0].clone(), "First argument of `lambda`")?;
+                let arg_names = expr_as_list!(args_list[0].clone(), "First argument of `lambda`")?;
                 let expr_to_run = args_list[1].clone();
                 let define = if let Some(ObjExpr::Lambda(ObjLambda { func })) =
                     env.get("define".to_string())
@@ -285,7 +285,7 @@ impl Env {
         env.insert_proc(
             "map".to_string(),
             Rc::new(|args_list, env| {
-                arg_as_lambda!(
+                expr_as_lambda!(
                     eval_expr(dealias(args_list[0].clone(), env.clone()), env.clone())?,
                     "First argument of `map`"
                 )?;
@@ -294,7 +294,7 @@ impl Env {
                     .iter()
                     .enumerate()
                     .map(|(i, expr)| {
-                        arg_as_list!(
+                        expr_as_list!(
                             dealias(expr.clone(), env.clone()),
                             format!("Argument {} of `map`", i)
                         )
@@ -317,8 +317,8 @@ impl Env {
             "*".to_string(),
             Rc::new(|args_list, env| {
                 assert_arity!("*", 2, &args_list);
-                let l = arg_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "*")?;
-                let r = arg_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "*")?;
+                let l = expr_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "*")?;
+                let r = expr_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "*")?;
                 Ok(ObjExpr::from(l * r))
             }),
         );
@@ -326,8 +326,8 @@ impl Env {
             "+".to_string(),
             Rc::new(|args_list, env| {
                 assert_arity!("+", 2, &args_list);
-                let l = arg_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "+")?;
-                let r = arg_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "+")?;
+                let l = expr_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "+")?;
+                let r = expr_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "+")?;
                 Ok(ObjExpr::from(l + r))
             }),
         );
@@ -335,8 +335,8 @@ impl Env {
             "-".to_string(),
             Rc::new(|args_list, env| {
                 assert_arity!("-", 2, &args_list);
-                let l = arg_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "-")?;
-                let r = arg_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "-")?;
+                let l = expr_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "-")?;
+                let r = expr_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "-")?;
                 Ok(ObjExpr::from(l - r))
             }),
         );
@@ -344,8 +344,8 @@ impl Env {
             "<".to_string(),
             Rc::new(|args_list, env| {
                 assert_arity!("<", 2, &args_list);
-                let l = arg_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "<")?;
-                let r = arg_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "<")?;
+                let l = expr_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "<")?;
+                let r = expr_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "<")?;
                 Ok(ObjExpr::from((l < r) as usize as f64))
             }),
         );
@@ -408,7 +408,7 @@ fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
             } else {
                 return Err("Got an empty list".to_string());
             };
-            let func = arg_as_lambda!(
+            let func = expr_as_lambda!(
                 eval_expr(first_expr.clone(), env.clone())?,
                 "First element of a list"
             )?;
