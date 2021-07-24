@@ -136,42 +136,44 @@ fn parse_into_expr<I: Iterator<Item = String>>(tokens: &mut Peekable<I>) -> Opti
     }
 }
 
-macro_rules! expr_as_number {
-    ($expr:expr, $fname:expr) => {{
-        if let ObjExpr::Atom(ObjAtom::Number(ObjNumber { value })) = $expr {
-            Ok(value)
-        } else {
-            Err(format!("{} expects a number but got `{:?}`", $fname, $expr))
+macro_rules! generate_expr_as {
+    ($name:ident, $type:ident, $pattern:pat, $inner:expr) => {
+        #[macro_export]
+        macro_rules! $name {
+            ($expr:expr, $fname:expr) => {{
+                if let $pattern = $expr {
+                    Ok($inner)
+                } else {
+                    Err(format!(
+                        "{} expects a(n) {} but got `{:?}`",
+                        $fname,
+                        stringify!($type),
+                        $expr
+                    ))
+                }
+            }};
         }
-    }};
+    };
 }
-macro_rules! expr_as_symbol {
-    ($expr:expr, $fname:expr) => {{
-        if let ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) = $expr {
-            Ok(name)
-        } else {
-            Err(format!("{} expects a symbol but got `{:?}`", $fname, $expr))
-        }
-    }};
-}
-macro_rules! expr_as_lambda {
-    ($expr:expr, $fname:expr) => {{
-        if let ObjExpr::Lambda(ObjLambda { func }) = $expr {
-            Ok(func)
-        } else {
-            Err(format!("{} expects a lambda but got `{:?}`", $fname, $expr))
-        }
-    }};
-}
-macro_rules! expr_as_list {
-    ($expr:expr, $fname:expr) => {{
-        if let ObjExpr::List(ObjList { list }) = $expr {
-            Ok(list)
-        } else {
-            Err(format!("{} expects a list but got `{:?}`", $fname, $expr))
-        }
-    }};
-}
+generate_expr_as!(
+    expr_as_number,
+    number,
+    ObjExpr::Atom(ObjAtom::Number(ObjNumber { value })),
+    value
+);
+generate_expr_as!(
+    expr_as_symbol,
+    symbol,
+    ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })),
+    name
+);
+generate_expr_as!(
+    expr_as_lambda,
+    lambda,
+    ObjExpr::Lambda(ObjLambda { func }),
+    func
+);
+generate_expr_as!(expr_as_list, list, ObjExpr::List(ObjList { list }), list);
 
 macro_rules! assert_arity {
     ($fname:expr, $arity:expr, $args_list:expr) => {
