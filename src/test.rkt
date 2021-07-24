@@ -7,5 +7,5 @@
     (define zip (lambda (l1 l2) (
         map list l1 l2
     )))
-    (zip (1 2 3) (1 2 3))
+    (zip (quote (1 2 3)) (quote (1 2 3)))
 )
