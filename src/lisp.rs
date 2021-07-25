@@ -102,6 +102,11 @@ impl From<f64> for ObjExpr {
         ObjExpr::Atom(ObjAtom::Number(ObjNumber { value: n }))
     }
 }
+impl From<bool> for ObjExpr {
+    fn from(n: bool) -> Self {
+        ObjExpr::Atom(ObjAtom::Number(ObjNumber { value: n as isize as f64 }))
+    }
+}
 impl Debug for ObjExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -162,6 +167,12 @@ generate_expr_as!(
     value
 );
 generate_expr_as!(
+    expr_as_boolean,
+    number,
+    ObjExpr::Atom(ObjAtom::Number(ObjNumber { value })),
+    value != 0f64
+);
+generate_expr_as!(
     expr_as_symbol,
     symbol,
     ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })),
@@ -183,6 +194,24 @@ macro_rules! assert_arity {
             $fname,
             $arity,
             $args_list
+        );
+    };
+}
+
+#[macro_export]
+macro_rules! insert_binary_op {
+    (_expr, $left:expr, $op:tt, $r:expr) => {
+        ($left $op $r)
+    };
+    ($op:tt, $macro:ident, $env:expr) => {
+        $env.insert_proc(
+            stringify!($op).to_string(),
+            Rc::new(|args_list, env| {
+                assert_arity!(stringify!($op), 2, &args_list);
+                let l = $macro!(eval_expr(args_list[0].clone(), env.clone())?, stringify!($op))?;
+                let r = $macro!(eval_expr(args_list[1].clone(), env.clone())?, stringify!($op))?;
+                Ok(ObjExpr::from(insert_binary_op!(_expr, l, $op, r)))
+            }),
         );
     };
 }
@@ -315,42 +344,12 @@ impl Env {
                 Ok(ObjExpr::List(ObjList { list: results }))
             }),
         );
-        env.insert_proc(
-            "*".to_string(),
-            Rc::new(|args_list, env| {
-                assert_arity!("*", 2, &args_list);
-                let l = expr_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "*")?;
-                let r = expr_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "*")?;
-                Ok(ObjExpr::from(l * r))
-            }),
-        );
-        env.insert_proc(
-            "+".to_string(),
-            Rc::new(|args_list, env| {
-                assert_arity!("+", 2, &args_list);
-                let l = expr_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "+")?;
-                let r = expr_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "+")?;
-                Ok(ObjExpr::from(l + r))
-            }),
-        );
-        env.insert_proc(
-            "-".to_string(),
-            Rc::new(|args_list, env| {
-                assert_arity!("-", 2, &args_list);
-                let l = expr_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "-")?;
-                let r = expr_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "-")?;
-                Ok(ObjExpr::from(l - r))
-            }),
-        );
-        env.insert_proc(
-            "<".to_string(),
-            Rc::new(|args_list, env| {
-                assert_arity!("<", 2, &args_list);
-                let l = expr_as_number!(eval_expr(args_list[0].clone(), env.clone())?, "<")?;
-                let r = expr_as_number!(eval_expr(args_list[1].clone(), env.clone())?, "<")?;
-                Ok(ObjExpr::from((l < r) as usize as f64))
-            }),
-        );
+        insert_binary_op!(+, expr_as_number, env);
+        insert_binary_op!(-, expr_as_number, env);
+        insert_binary_op!(*, expr_as_number, env);
+        insert_binary_op!(/, expr_as_number, env);
+        insert_binary_op!(<, expr_as_boolean, env);
+        insert_binary_op!(>, expr_as_boolean, env);
         env.insert_var("pi".to_string(), ObjExpr::from(std::f64::consts::PI));
         env
     }
