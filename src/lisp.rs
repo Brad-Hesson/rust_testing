@@ -327,7 +327,7 @@ impl Env {
                     .map(|(i, expr)| {
                         expr_as_list!(
                             dealias(expr.clone(), env.clone()),
-                            format!("Argument {} of `map`", i)
+                            format!("Argument {} of `map`", i + 1)
                         )
                     })
                     .collect::<Result<Vec<Vec<ObjExpr>>, EvalErr>>()?;
