@@ -227,8 +227,8 @@ macro_rules! insert_binary_op {
             stringify!($op).to_string(),
             Rc::new(|args_list, env| {
                 assert_arity!(stringify!($op), 2, &args_list);
-                let l = $macro!(eval_expr(args_list[0].clone(), env.clone())?, stringify!($op))?;
-                let r = $macro!(eval_expr(args_list[1].clone(), env.clone())?, stringify!($op))?;
+                let l = $macro!(eval_expr(args_list[0].clone(), env)?, stringify!($op))?;
+                let r = $macro!(eval_expr(args_list[1].clone(), env)?, stringify!($op))?;
                 Ok(ObjExpr::from(insert_binary_op!(_expr, l, $op, r)))
             }),
         );
@@ -236,30 +236,26 @@ macro_rules! insert_binary_op {
 }
 
 type EvalErr = String;
-type LambdaFn = dyn Fn(Vec<ObjExpr>, Env) -> Result<ObjExpr, EvalErr>;
+type LambdaFn = dyn Fn(Vec<ObjExpr>, &Env) -> Result<ObjExpr, EvalErr>;
 
-struct StackFrame {
-    vars: RefCell<HashMap<String, ObjExpr>>,
-}
+struct StackFrame(RefCell<HashMap<String, ObjExpr>>);
 impl StackFrame {
     fn new() -> Self {
-        Self {
-            vars: RefCell::new(HashMap::new()),
-        }
+        Self(RefCell::new(HashMap::new()))
     }
 }
-#[derive(Clone)]
-pub struct Env(Rc<RefCell<Vec<StackFrame>>>);
+
+pub struct Env(RefCell<Vec<StackFrame>>);
 
 impl Env {
     pub fn new() -> Self {
-        let env = Self(Rc::new(RefCell::new(vec![StackFrame::new()])));
+        let env = Self(RefCell::new(vec![StackFrame::new()]));
         env.insert_proc(
             "begin".to_string(),
             Rc::new(|args_list, env| {
                 args_list
                     .iter()
-                    .map(|expr| eval_expr(expr.clone(), env.clone()))
+                    .map(|expr| eval_expr(expr.clone(), env))
                     .last()
                     .expect("`begin` expected at least one expression")
             }),
@@ -269,7 +265,7 @@ impl Env {
             Rc::new(|args_list, env| {
                 assert_arity!("define", 2, &args_list);
                 let name = expr_as_symbol!(args_list[0].clone(), "First argument of `define`")?;
-                let definable = eval_expr(args_list[1].clone(), env.clone())?;
+                let definable = eval_expr(args_list[1].clone(), env)?;
                 match definable {
                     ObjExpr::Lambda(ObjLambda { func }) => env.insert_proc(name, func),
                     expr => env.insert_var(name, expr),
@@ -282,7 +278,7 @@ impl Env {
             Rc::new(|args_list, env| {
                 assert_arity!("if", 3, &args_list);
                 let cond = expr_as_number!(
-                    eval_expr(args_list[0].clone(), env.clone())?,
+                    eval_expr(args_list[0].clone(), env)?,
                     "First argument of 'if'"
                 )?;
                 if cond != 0f64 {
@@ -313,15 +309,15 @@ impl Env {
                     Err("`define` should always be in the environment")
                 }?;
                 Ok(ObjExpr::Lambda(ObjLambda {
-                    func: Rc::new(move |fn_args_list, fn_env: Env| {
+                    func: Rc::new(move |fn_args_list, fn_env: &Env| {
                         assert_arity!("lambda function", arg_names.len(), &fn_args_list);
                         fn_env.push_new_stack();
                         for (arg_name, arg_expr) in
                             Iterator::zip(arg_names.clone().into_iter(), fn_args_list)
                         {
-                            define(vec![arg_name, arg_expr], fn_env.clone())?;
+                            define(vec![arg_name, arg_expr], fn_env)?;
                         }
-                        let out = eval_expr(expr_to_run.clone(), fn_env.clone());
+                        let out = eval_expr(expr_to_run.clone(), fn_env);
                         fn_env.pop_old_stack();
                         out
                     }),
@@ -336,7 +332,7 @@ impl Env {
             "map".to_string(),
             Rc::new(|args_list, env| {
                 expr_as_lambda!(
-                    eval_expr(dealias(args_list[0].clone(), env.clone())?, env.clone())?,
+                    eval_expr(dealias(args_list[0].clone(), env)?, env)?,
                     "First argument of `map`"
                 )?;
                 let expr_to_run = args_list[0].clone();
@@ -345,7 +341,7 @@ impl Env {
                     .enumerate()
                     .map(|(i, expr)| {
                         expr_as_list!(
-                            dealias(expr.clone(), env.clone())?,
+                            dealias(expr.clone(), env)?,
                             format!("Argument {} of `map`", i + 1)
                         )
                     })
@@ -358,7 +354,7 @@ impl Env {
                 {
                     index += 1;
                     let expr = ObjExpr::List(ObjList { list: args });
-                    results.push(eval_expr(expr, env.clone())?)
+                    results.push(eval_expr(expr, env)?)
                 }
                 Ok(ObjExpr::List(ObjList { list: results }))
             }),
@@ -367,11 +363,11 @@ impl Env {
             "apply".to_string(),
             Rc::new(|args_list, env| {
                 let func = expr_as_lambda!(
-                    dealias(args_list[0].clone(), env.clone())?,
+                    dealias(args_list[0].clone(), env)?,
                     "First argument of `apply`"
                 )?;
                 let list = expr_as_list!(
-                    eval_expr(args_list[1].clone(), env.clone())?,
+                    eval_expr(args_list[1].clone(), env)?,
                     "Second argument of `apply`"
                 )?;
                 func(list, env)
@@ -387,31 +383,31 @@ impl Env {
         env
     }
     fn push_new_stack(&self) {
-        self.0.as_ref().borrow_mut().push(StackFrame::new());
+        self.0.borrow_mut().push(StackFrame::new());
     }
     fn pop_old_stack(&self) {
-        self.0.as_ref().borrow_mut().pop();
+        self.0.borrow_mut().pop();
     }
     fn get(&self, name: String) -> Option<ObjExpr> {
-        let borrow = self.0.as_ref().borrow();
+        let borrow = self.0.borrow();
         let mut iter = borrow.iter();
         while let Some(sf) = iter.next_back() {
-            if let Some(func) = sf.vars.borrow().get(&name) {
+            if let Some(func) = sf.0.borrow().get(&name) {
                 return Some(func.clone());
             }
         }
         None
     }
     fn insert_var(&self, name: String, expr: ObjExpr) {
-        if let Some(a) = self.0.as_ref().borrow().as_slice().last() {
-            a.vars.borrow_mut().insert(name, expr);
+        if let Some(a) = self.0.borrow().as_slice().last() {
+            a.0.borrow_mut().insert(name, expr);
         } else {
             panic!("No global scope in provided environment");
         }
     }
     fn insert_proc(&self, name: String, func: Rc<LambdaFn>) {
-        if let Some(a) = self.0.as_ref().borrow().as_slice().last() {
-            a.vars
+        if let Some(a) = self.0.borrow().as_slice().last() {
+            a.0
                 .borrow_mut()
                 .insert(name, ObjExpr::Lambda(ObjLambda { func }));
         } else {
@@ -425,8 +421,8 @@ impl Default for Env {
     }
 }
 
-fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
-    let expr = dealias(expr, env.clone())?;
+fn eval_expr(expr: ObjExpr, env: &Env) -> Result<ObjExpr, EvalErr> {
+    let expr = dealias(expr, env)?;
     match expr {
         ObjExpr::List(ObjList { list }) => {
             //eprintln!("Evaluating list: {:?}", list);
@@ -436,7 +432,7 @@ fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
                 return Err("Got an empty list".to_string());
             };
             let func = expr_as_lambda!(
-                eval_expr(first_expr.clone(), env.clone())?,
+                eval_expr(first_expr.clone(), env)?,
                 "First element of a list"
             )?;
             func(args_list.to_vec(), env)
@@ -445,7 +441,7 @@ fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
     }
 }
 
-fn dealias(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
+fn dealias(expr: ObjExpr, env: &Env) -> Result<ObjExpr, EvalErr> {
     match expr {
         ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) => env
             .get(name.clone())
@@ -469,7 +465,7 @@ pub fn parse_lisp(source: &str) -> ObjExpr {
     parse_into_expr(&mut tokenizer).unwrap()
 }
 
-pub fn run_lisp(source: &str, env: Env) -> Result<ObjExpr, EvalErr> {
+pub fn run_lisp(source: &str, env: &Env) -> Result<ObjExpr, EvalErr> {
     let expr = parse_lisp(source);
     eval_expr(expr, env)
 }
@@ -482,7 +478,7 @@ mod tests {
     #[test]
     fn it_works() {
         let env = Env::new();
-        let out = run_lisp("(begin (define r 10) (* pi (* r r)))", env).unwrap();
+        let out = run_lisp("(begin (define r 10) (* pi (* r r)))", &env).unwrap();
         eprintln!("{:#?}", out);
         assert_eq!(format!("{:?}", out), "314.1592653589793")
     }
@@ -491,13 +487,13 @@ mod tests {
     fn if_test() {
         let env = Env::new();
 
-        run_lisp("(define b 1)", env.clone()).unwrap();
-        let out = run_lisp("(if b (* 2 5) 20)", env.clone()).unwrap();
+        run_lisp("(define b 1)", &env).unwrap();
+        let out = run_lisp("(if b (* 2 5) 20)", &env).unwrap();
         eprintln!("{:#?}", out);
         assert_eq!(format!("{:?}", out), "10");
 
-        run_lisp("(define b 0)", env.clone()).unwrap();
-        let out = run_lisp("(if b (* 2 5) 20)", env.clone()).unwrap();
+        run_lisp("(define b 0)", &env).unwrap();
+        let out = run_lisp("(if b (* 2 5) 20)", &env).unwrap();
         eprintln!("{:#?}", out);
         assert_eq!(format!("{:?}", out), "20");
     }
@@ -505,7 +501,7 @@ mod tests {
     #[test]
     fn lambda_test() {
         let env = Env::new();
-        let out = run_lisp("((lambda (r) (begin (define h 10) (* r h))) 2)", env).unwrap();
+        let out = run_lisp("((lambda (r) (begin (define h 10) (* r h))) 2)", &env).unwrap();
         eprintln!("{:?}", out);
         assert_eq!(format!("{:?}", out), "20");
     }
@@ -513,12 +509,12 @@ mod tests {
     #[test]
     fn lambda_define_test() {
         let env = Env::new();
-        run_lisp("(define square (lambda (r) (* r r)))", env.clone()).unwrap();
-        let out = run_lisp("(square 2)", env.clone()).unwrap();
+        run_lisp("(define square (lambda (r) (* r r)))", &env).unwrap();
+        let out = run_lisp("(square 2)", &env).unwrap();
         eprintln!("{:?}", out);
         assert_eq!(format!("{:?}", out), "4");
 
-        let out = run_lisp("(square 3)", env.clone()).unwrap();
+        let out = run_lisp("(square 3)", &env).unwrap();
         eprintln!("{:?}", out);
         assert_eq!(format!("{:?}", out), "9");
     }
@@ -527,7 +523,7 @@ mod tests {
     fn file_test() {
         let source = read_to_string("src/test.rkt").unwrap();
         let env = Env::new();
-        let out = run_lisp(&source, env).unwrap();
+        let out = run_lisp(&source, &env).unwrap();
         eprintln!("{:?}", out);
         //assert_eq!(format!("{:?}", out), "2584");
     }
