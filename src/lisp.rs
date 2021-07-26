@@ -421,17 +421,12 @@ fn eval_expr(expr: ObjExpr, env: &mut Env) -> Result<ObjExpr, EvalErr> {
     let expr = dealias(expr, env)?;
     match expr {
         ObjExpr::List(ObjList { list }) => {
-            //eprintln!("Evaluating list: {:?}", list);
-            let (first_expr, args_list) = if let Some((f, a)) = list.split_first() {
-                (f, a)
-            } else {
+            if list.is_empty() {
                 return Err("Got an empty list".to_string());
-            };
-            let func = expr_as_lambda!(
-                eval_expr(first_expr.clone(), env)?,
-                "First element of a list"
-            )?;
-            func(args_list.to_vec(), env)
+            }
+            let func =
+                expr_as_lambda!(eval_expr(list[0].clone(), env)?, "First element of a list")?;
+            func(list[1..].to_vec(), env)
         }
         expr => Ok(expr),
     }
