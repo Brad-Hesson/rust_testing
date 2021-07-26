@@ -1,6 +1,5 @@
 use core::panic;
 use std::{
-    cell::RefCell,
     collections::HashMap,
     fmt::{Debug, Display},
     iter::{self, Peekable},
@@ -236,20 +235,20 @@ macro_rules! insert_binary_op {
 }
 
 type EvalErr = String;
-type LambdaFn = dyn Fn(Vec<ObjExpr>, &Env) -> Result<ObjExpr, EvalErr>;
+type LambdaFn = dyn Fn(Vec<ObjExpr>, &mut Env) -> Result<ObjExpr, EvalErr>;
 
-struct StackFrame(RefCell<HashMap<String, ObjExpr>>);
+struct StackFrame(HashMap<String, ObjExpr>);
 impl StackFrame {
     fn new() -> Self {
-        Self(RefCell::new(HashMap::new()))
+        Self(HashMap::new())
     }
 }
 
-pub struct Env(RefCell<Vec<StackFrame>>);
+pub struct Env(Vec<StackFrame>);
 
 impl Env {
     pub fn new() -> Self {
-        let env = Self(RefCell::new(vec![StackFrame::new()]));
+        let mut env = Self(vec![StackFrame::new()]);
         env.insert_proc(
             "begin".to_string(),
             Rc::new(|args_list, env| {
@@ -309,7 +308,7 @@ impl Env {
                     Err("`define` should always be in the environment")
                 }?;
                 Ok(ObjExpr::Lambda(ObjLambda {
-                    func: Rc::new(move |fn_args_list, fn_env: &Env| {
+                    func: Rc::new(move |fn_args_list, fn_env: &mut Env| {
                         assert_arity!("lambda function", arg_names.len(), &fn_args_list);
                         fn_env.push_new_stack();
                         for (arg_name, arg_expr) in
@@ -382,34 +381,31 @@ impl Env {
         env.insert_var("pi".to_string(), ObjExpr::from(std::f64::consts::PI));
         env
     }
-    fn push_new_stack(&self) {
-        self.0.borrow_mut().push(StackFrame::new());
+    fn push_new_stack(&mut self) {
+        self.0.push(StackFrame::new());
     }
-    fn pop_old_stack(&self) {
-        self.0.borrow_mut().pop();
+    fn pop_old_stack(&mut self) {
+        self.0.pop();
     }
     fn get(&self, name: String) -> Option<ObjExpr> {
-        let borrow = self.0.borrow();
-        let mut iter = borrow.iter();
+        let mut iter = self.0.iter();
         while let Some(sf) = iter.next_back() {
-            if let Some(func) = sf.0.borrow().get(&name) {
+            if let Some(func) = sf.0.get(&name) {
                 return Some(func.clone());
             }
         }
         None
     }
-    fn insert_var(&self, name: String, expr: ObjExpr) {
-        if let Some(a) = self.0.borrow().as_slice().last() {
-            a.0.borrow_mut().insert(name, expr);
+    fn insert_var(&mut self, name: String, expr: ObjExpr) {
+        if let Some(a) = self.0.as_mut_slice().last_mut() {
+            a.0.insert(name, expr);
         } else {
             panic!("No global scope in provided environment");
         }
     }
-    fn insert_proc(&self, name: String, func: Rc<LambdaFn>) {
-        if let Some(a) = self.0.borrow().as_slice().last() {
-            a.0
-                .borrow_mut()
-                .insert(name, ObjExpr::Lambda(ObjLambda { func }));
+    fn insert_proc(&mut self, name: String, func: Rc<LambdaFn>) {
+        if let Some(a) = self.0.as_mut_slice().last_mut() {
+            a.0.insert(name, ObjExpr::Lambda(ObjLambda { func }));
         } else {
             panic!("No global scope in provided environment");
         }
@@ -421,7 +417,7 @@ impl Default for Env {
     }
 }
 
-fn eval_expr(expr: ObjExpr, env: &Env) -> Result<ObjExpr, EvalErr> {
+fn eval_expr(expr: ObjExpr, env: &mut Env) -> Result<ObjExpr, EvalErr> {
     let expr = dealias(expr, env)?;
     match expr {
         ObjExpr::List(ObjList { list }) => {
@@ -465,7 +461,7 @@ pub fn parse_lisp(source: &str) -> ObjExpr {
     parse_into_expr(&mut tokenizer).unwrap()
 }
 
-pub fn run_lisp(source: &str, env: &Env) -> Result<ObjExpr, EvalErr> {
+pub fn run_lisp(source: &str, env: &mut Env) -> Result<ObjExpr, EvalErr> {
     let expr = parse_lisp(source);
     eval_expr(expr, env)
 }
@@ -477,44 +473,44 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let env = Env::new();
-        let out = run_lisp("(begin (define r 10) (* pi (* r r)))", &env).unwrap();
+        let mut env = Env::new();
+        let out = run_lisp("(begin (define r 10) (* pi (* r r)))", &mut env).unwrap();
         eprintln!("{:#?}", out);
         assert_eq!(format!("{:?}", out), "314.1592653589793")
     }
 
     #[test]
     fn if_test() {
-        let env = Env::new();
+        let mut env = Env::new();
 
-        run_lisp("(define b 1)", &env).unwrap();
-        let out = run_lisp("(if b (* 2 5) 20)", &env).unwrap();
+        run_lisp("(define b 1)", &mut env).unwrap();
+        let out = run_lisp("(if b (* 2 5) 20)", &mut env).unwrap();
         eprintln!("{:#?}", out);
         assert_eq!(format!("{:?}", out), "10");
 
-        run_lisp("(define b 0)", &env).unwrap();
-        let out = run_lisp("(if b (* 2 5) 20)", &env).unwrap();
+        run_lisp("(define b 0)", &mut env).unwrap();
+        let out = run_lisp("(if b (* 2 5) 20)", &mut env).unwrap();
         eprintln!("{:#?}", out);
         assert_eq!(format!("{:?}", out), "20");
     }
 
     #[test]
     fn lambda_test() {
-        let env = Env::new();
-        let out = run_lisp("((lambda (r) (begin (define h 10) (* r h))) 2)", &env).unwrap();
+        let mut env = Env::new();
+        let out = run_lisp("((lambda (r) (begin (define h 10) (* r h))) 2)", &mut env).unwrap();
         eprintln!("{:?}", out);
         assert_eq!(format!("{:?}", out), "20");
     }
 
     #[test]
     fn lambda_define_test() {
-        let env = Env::new();
-        run_lisp("(define square (lambda (r) (* r r)))", &env).unwrap();
-        let out = run_lisp("(square 2)", &env).unwrap();
+        let mut env = Env::new();
+        run_lisp("(define square (lambda (r) (* r r)))", &mut env).unwrap();
+        let out = run_lisp("(square 2)", &mut env).unwrap();
         eprintln!("{:?}", out);
         assert_eq!(format!("{:?}", out), "4");
 
-        let out = run_lisp("(square 3)", &env).unwrap();
+        let out = run_lisp("(square 3)", &mut env).unwrap();
         eprintln!("{:?}", out);
         assert_eq!(format!("{:?}", out), "9");
     }
@@ -522,8 +518,8 @@ mod tests {
     #[test]
     fn file_test() {
         let source = read_to_string("src/test.rkt").unwrap();
-        let env = Env::new();
-        let out = run_lisp(&source, &env).unwrap();
+        let mut env = Env::new();
+        let out = run_lisp(&source, &mut env).unwrap();
         eprintln!("{:?}", out);
         //assert_eq!(format!("{:?}", out), "2584");
     }
