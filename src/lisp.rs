@@ -336,7 +336,7 @@ impl Env {
             "map".to_string(),
             Rc::new(|args_list, env| {
                 expr_as_lambda!(
-                    eval_expr(dealias(args_list[0].clone(), env.clone()), env.clone())?,
+                    eval_expr(dealias(args_list[0].clone(), env.clone())?, env.clone())?,
                     "First argument of `map`"
                 )?;
                 let expr_to_run = args_list[0].clone();
@@ -345,7 +345,7 @@ impl Env {
                     .enumerate()
                     .map(|(i, expr)| {
                         expr_as_list!(
-                            dealias(expr.clone(), env.clone()),
+                            dealias(expr.clone(), env.clone())?,
                             format!("Argument {} of `map`", i + 1)
                         )
                     })
@@ -388,13 +388,6 @@ impl Env {
         }
         None
     }
-    fn contains_key(&self, name: String) -> bool {
-        self.0
-            .as_ref()
-            .borrow()
-            .iter()
-            .any(|sf| sf.vars.borrow().contains_key(&name))
-    }
     fn insert_var(&self, name: String, expr: ObjExpr) {
         if let Some(a) = self.0.as_ref().borrow().as_slice().last() {
             a.vars.borrow_mut().insert(name, expr);
@@ -419,7 +412,7 @@ impl Default for Env {
 }
 
 fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
-    let expr = dealias(expr, env.clone());
+    let expr = dealias(expr, env.clone())?;
     match expr {
         ObjExpr::List(ObjList { list }) => {
             //eprintln!("Evaluating list: {:?}", list);
@@ -438,12 +431,12 @@ fn eval_expr(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
     }
 }
 
-fn dealias(expr: ObjExpr, env: Env) -> ObjExpr {
+fn dealias(expr: ObjExpr, env: Env) -> Result<ObjExpr, EvalErr> {
     match expr {
-        ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) if env.contains_key(name.clone()) => env
-            .get(name)
-            .expect("Unreachable: Already checked that the key exists"),
-        expr => expr,
+        ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol { name })) => env
+            .get(name.clone())
+            .ok_or(format!("Variable `{}` does not exist", name)),
+        expr => Ok(expr),
     }
 }
 
