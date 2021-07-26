@@ -363,6 +363,20 @@ impl Env {
                 Ok(ObjExpr::List(ObjList { list: results }))
             }),
         );
+        env.insert_proc(
+            "apply".to_string(),
+            Rc::new(|args_list, env| {
+                let func = expr_as_lambda!(
+                    dealias(args_list[0].clone(), env.clone())?,
+                    "First argument of `apply`"
+                )?;
+                let list = expr_as_list!(
+                    eval_expr(args_list[1].clone(), env.clone())?,
+                    "Second argument of `apply`"
+                )?;
+                func(list, env)
+            }),
+        );
         insert_binary_op!(+, expr_as_number, env);
         insert_binary_op!(-, expr_as_number, env);
         insert_binary_op!(*, expr_as_number, env);
