@@ -104,7 +104,9 @@ impl From<f64> for ObjExpr {
 }
 impl From<bool> for ObjExpr {
     fn from(n: bool) -> Self {
-        ObjExpr::Atom(ObjAtom::Number(ObjNumber { value: n as isize as f64 }))
+        ObjExpr::Atom(ObjAtom::Number(ObjNumber {
+            value: n as isize as f64,
+        }))
     }
 }
 impl Debug for ObjExpr {
@@ -128,6 +130,23 @@ fn parse_into_expr<I: Iterator<Item = String>>(tokens: &mut Peekable<I>) -> Opti
             }
             assert_eq!(tokens.next(), Some(")".to_string()));
             Some(ObjExpr::List(ObjList { list }))
+        }
+        "'" => {
+            tokens.next();
+            assert!(tokens.next() == Some("(".to_string()));
+            let mut list = Vec::new();
+            while let Some(expr) = parse_into_expr(tokens) {
+                list.push(expr);
+            }
+            assert_eq!(tokens.next(), Some(")".to_string()));
+            Some(ObjExpr::List(ObjList {
+                list: vec![
+                    ObjExpr::Atom(ObjAtom::Symbol(ObjSymbol {
+                        name: "quote".to_string(),
+                    })),
+                    ObjExpr::List(ObjList { list }),
+                ],
+            }))
         }
         _ => {
             let tok = tokens.next()?;
@@ -433,7 +452,8 @@ pub fn parse_lisp(source: &str) -> ObjExpr {
         source: source.to_string(),
         patterns: vec![
             Regex::new(r"(?m)\A\s*;.*$").unwrap(),
-            Regex::new(r"(?m)\A\s*([^\s()]+)").unwrap(),
+            Regex::new(r"(?m)\A\s*([^\s'()]+)").unwrap(),
+            Regex::new(r"(?m)\A\s*(')").unwrap(),
             Regex::new(r"(?m)\A\s*(\()").unwrap(),
             Regex::new(r"(?m)\A\s*(\))").unwrap(),
         ],
